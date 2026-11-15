@@ -4,6 +4,8 @@ Shrink hundreds of large photos under a size limit (e.g. 8 MB) while keeping as 
 
 ## Run
 
+**Download (Windows):** grab `BatchCompressor.exe` from the [Releases page](https://github.com/omkar-ramesh/Batch-Compressor/releases/latest) and double-click it.
+
 **Desktop app:** double-click `dist\BatchCompressor.exe` (build it once with `build.bat`), or from source `python app.py`.
 
 **In the browser:** `run.bat` (or `python server.py`) and open `http://127.0.0.1:8765`.
