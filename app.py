@@ -95,7 +95,7 @@ def main() -> None:
         if kind == "files":
             res = window.create_file_dialog(
                 webview.OPEN_DIALOG, allow_multiple=True,
-                file_types=("Images (*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.tif;*.tiff)", "All files (*.*)"),
+                file_types=("Images (*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.tif;*.tiff;*.avif;*.heic;*.heif)", "All files (*.*)"),
             )
         else:
             res = window.create_file_dialog(webview.FOLDER_DIALOG)

@@ -33,6 +33,12 @@ Returns a result record: source, destination, original bytes, new bytes, quality
 After encoding, the output is decoded and compared with the image it was encoded from (the resized source, if resized) using luma SSIM with a 7×7 box window, on up to 4×4 tiles of 256 px at the output's resolution (~1 MP, ~100 ms per 4K file). Reported as the tile mean, capped at worst tile + 0.01 so local artifacts aren't averaged away. Resolution loss is reported separately via dimensions. Skipped for PNG (lossless) and copied files. `measure_quality` setting (default on). numpy is optional; without it the score is `null`.
 UI bands: ≥ 0.97 excellent, ≥ 0.93 good, below = "Check quality" filter.
 
+### Formats
+Input: JPEG, PNG, WebP, AVIF, HEIC/HEIF (via optional `pillow-heif`), TIFF, BMP, GIF. Output: Auto is always JPEG; Manual adds WebP, AVIF (`avif_speed` effort) and keep-original. `GET /api/file` renders formats browsers can't show (HEIC, TIFF) to lossless PNG.
+
+### Compare screen analysis
+`POST /api/analyze` (source + destination, or a `preview_id`) returns PSNR, mean/max difference, share of pixels changed, a 12-column tile map of SSIM scores with the worst tile, and a max-pooled per-pixel difference image (≤ 2048 px). The UI colours and amplifies the difference image client-side. Zoom/pan applies one shared CSS transform to both layers.
+
 ### Preview
 `engine.preview(path, settings)` runs the same load/fit pipeline in memory and writes nothing. Exposed as `POST /api/preview` (image bytes, result JSON in `X-Result`). `GET /api/file` serves real image bytes so the before/after slider compares true pixels, not re-encoded thumbnails.
 

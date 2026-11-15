@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict, field
 from typing import Literal
 
-OutputFormat = Literal["jpeg", "webp", "keep"]
+OutputFormat = Literal["jpeg", "webp", "avif", "keep"]
 Subsampling = Literal["4:4:4", "4:2:2", "4:2:0"]
 OnConflict = Literal["suffix", "overwrite", "skip"]
 
@@ -28,6 +28,7 @@ class Settings:
     on_conflict: OnConflict = "suffix"
     workers: int = 0                   # 0 = cpu count
     measure_quality: bool = True       # compute SSIM vs source for each output
+    avif_speed: int = 6                # AVIF encoder effort: 0 = slowest/smallest, 10 = fastest
 
     @property
     def target_bytes(self) -> int:
@@ -45,7 +46,7 @@ class Settings:
         s.quality_min = min(max(int(s.quality_min), 1), s.quality_max)
         s.resize_step_pct = min(max(float(s.resize_step_pct), 1.0), 50.0)
         s.min_long_edge = max(16, int(s.min_long_edge))
-        if s.output_format not in ("jpeg", "webp", "keep"):
+        if s.output_format not in ("jpeg", "webp", "avif", "keep"):
             s.output_format = "jpeg"
         if s.subsampling not in SUBSAMPLING_CODES:
             s.subsampling = "4:4:4"
@@ -53,6 +54,7 @@ class Settings:
             s.on_conflict = "suffix"
         s.output_folder = (s.output_folder or "compressed").strip() or "compressed"
         s.workers = max(0, int(s.workers))
+        s.avif_speed = min(max(int(s.avif_speed), 0), 10)
         return s
 
     def to_dict(self) -> dict:

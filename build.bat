@@ -10,6 +10,7 @@ if exist ".buildenv\Scripts\python.exe" set PY=.buildenv\Scripts\python.exe
   --icon "assets\icon.ico" ^
   --add-data "static;static" ^
   --collect-all webview ^
+  --collect-all pillow_heif ^
   --hidden-import "compressor.engine" ^
   app.py || goto :fail
 echo.

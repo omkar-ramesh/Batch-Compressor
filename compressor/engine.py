@@ -14,9 +14,16 @@ from PIL import Image, ImageFile, ImageOps, UnidentifiedImageError
 from . import quality
 from .settings import Settings, SUBSAMPLING_CODES
 
+try:  # HEIC/HEIF input (iPhone photos). Optional.
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+    HEIC_OK = True
+except ImportError:  # pragma: no cover
+    HEIC_OK = False
+
 Image.MAX_IMAGE_PIXELS = None  # we trust local files; 4K+ panoramas exceed the default bomb check
 
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff", ".gif"}
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff", ".gif", ".avif", ".heic", ".heif"}
 
 STATUS_COMPRESSED = "compressed"
 STATUS_COPIED = "copied"
@@ -38,6 +45,7 @@ class Result:
     orig_height: int
     status: str
     error: Optional[str] = None
+    format: Optional[str] = None       # output format actually written (JPEG, WEBP, AVIF, PNG)
     ssim: Optional[float] = None       # perceptual similarity to the source, 1.0 = identical
 
     def to_dict(self) -> dict:
@@ -54,8 +62,12 @@ def _format_for(src: Path, settings: Settings) -> tuple[str, str]:
     """Return (PIL format name, file extension) for the output."""
     if settings.output_format == "webp":
         return "WEBP", ".webp"
+    if settings.output_format == "avif":
+        return "AVIF", ".avif"
     if settings.output_format == "keep":
         ext = src.suffix.lower()
+        if ext == ".avif":
+            return "AVIF", ".avif"
         if ext in (".jpg", ".jpeg"):
             return "JPEG", ext
         if ext == ".webp":
@@ -87,6 +99,10 @@ def _encode(img: Image.Image, fmt: str, quality: int, settings: Settings, exif: 
         kwargs.update(quality=quality, method=4)
         if exif:
             kwargs["exif"] = exif
+    elif fmt == "AVIF":
+        kwargs.update(quality=quality, speed=settings.avif_speed, subsampling=settings.subsampling)
+        if exif:
+            kwargs["exif"] = exif
     elif fmt == "PNG":
         # PNG is lossless: quality is ignored, we only get size from resizing.
         kwargs.update(optimize=True, compress_level=9)
@@ -104,7 +120,7 @@ def _prepare(img: Image.Image, fmt: str) -> Image.Image:
             return bg
         if img.mode not in ("RGB", "L"):
             return img.convert("RGB")
-    elif fmt == "WEBP":
+    elif fmt in ("WEBP", "AVIF"):
         if img.mode not in ("RGB", "RGBA"):
             return img.convert("RGBA" if "A" in img.mode or "transparency" in img.info else "RGB")
     return img
@@ -230,17 +246,34 @@ def _score(reference: Image.Image, data: bytes, fmt: str, settings: Settings) ->
         return None
 
 
+def load_pair(src_path: str, dest_path: str) -> tuple[Image.Image, Image.Image]:
+    """(reference, encoded) at the encoded file's resolution, for analysis."""
+    with Image.open(dest_path) as e:
+        fmt = (e.format or "JPEG").upper()
+        enc = e.convert("RGB")
+    ref, *_ = _load(Path(src_path), fmt if fmt in ("JPEG", "WEBP", "AVIF", "PNG") else "JPEG", Settings())
+    if ref.size != enc.size:
+        ref = ref.resize(enc.size, Image.LANCZOS)
+    return ref, enc
+
+
 def preview(src_path: str, settings: Settings) -> tuple[bytes, dict]:
     """Compress one image in memory with the given settings. Nothing is written.
     Returns (encoded bytes, result dict without destination)."""
+    data, r, _ = preview_full(src_path, settings)
+    return data, r
+
+
+def preview_full(src_path: str, settings: Settings) -> tuple[bytes, dict, Image.Image]:
+    """Like preview(), plus the image the bytes were encoded from."""
     src = Path(src_path)
     original_bytes = src.stat().st_size
     fmt, _ = _format_for(src, settings)
     img, exif, ow, oh, _, _ = _load(src, fmt, settings)
     data, q, cur, status = _fit(img, fmt, settings, exif)
     r = Result(str(src), None, original_bytes, len(data), q, cur.width, cur.height, ow, oh, status,
-               ssim=_score(cur, data, fmt, settings))
-    return data, r.to_dict()
+               ssim=_score(cur, data, fmt, settings), format=fmt)
+    return data, r.to_dict(), cur
 
 
 # --------------------------------------------------------------------------- main entry
@@ -280,7 +313,7 @@ def compress_file(src_path: str, settings: Settings) -> Result:
             original_bytes=original_bytes, new_bytes=len(data),
             quality=q, width=cur.width, height=cur.height,
             orig_width=orig_w, orig_height=orig_h, status=status,
-            ssim=_score(cur, data, fmt, settings),
+            ssim=_score(cur, data, fmt, settings), format=fmt,
         )
     except UnidentifiedImageError:
         return Result(str(src), None, original_bytes, 0, None, 0, 0, 0, 0, STATUS_FAILED, "not a readable image")

@@ -28,11 +28,21 @@ While it runs, each frame shows an amber "safelight" sweep as it's being worked 
 - **Presets** in the side panel: built-ins for email, web gallery (WebP) and archive, plus your own (*Save* the current settings under a name).
 - When a batch finishes in the background, the taskbar button flashes (desktop app) or a notification appears (browser).
 - **Select photos** (hover a frame for the checkbox, Shift-click for a range, Ctrl+A for all) to compress just those, **Save to…** a folder of your choice, or remove them from the batch.
-- **Click any photo** for a before/after slider on the real files (drag to compare, *100%* for pixel-level). *Preview with current settings* compresses that one photo in memory so you can judge settings before running the batch; nothing is saved. *Save to…* there saves that one photo wherever you like.
+- **Click any photo** to open the compare screen on the real files:
+  - **Slider**, **Flicker** (flip in place with Space, or *Auto flip*) and **Difference** (a heat map of where pixels changed, with adjustable amplification and an *Over photo* overlay).
+  - **Zoom and pan:** scroll to zoom up to 800%, drag to pan, double-click for 100%. Both versions stay locked together.
+  - **Worst area** jumps to the part of the photo that lost the most.
+  - **Details** panel: sizes, formats, quality used, SSIM, worst-area score, PSNR, share of pixels changed, and a clickable map of where the losses are.
+  - **‹ ›** or the arrow keys step through the photos, keeping your zoom.
+  - *Preview with current settings* compresses that one photo in memory so you can judge settings before running the batch; nothing is saved. *Save to…* saves that one photo wherever you like.
 - **New batch** clears the photos and results so the next set starts clean.
 - *Open the output folder automatically* (side panel) opens Explorer when a batch finishes.
 - Refreshing the page mid-batch reattaches to the running job; nothing is lost.
 - Deep link: `http://127.0.0.1:8765/#add=E:\Photos\Trip` pre-loads a folder (`&go=1` starts immediately, `&view=list` opens in list view).
+
+## Formats
+
+Reads JPEG, PNG, WebP, AVIF, HEIC/HEIF (iPhone photos), TIFF, BMP and GIF. **Auto** always writes JPEG. In **Manual** you can choose JPEG, WebP, AVIF (smallest files, slower, with an effort setting) or *Keep original*.
 
 ## How it compresses
 

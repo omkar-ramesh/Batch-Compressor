@@ -197,21 +197,47 @@
   .foot .k{color:var(--text3);margin-right:4px}
 
   /* ---------- compare ---------- */
-  .modal{position:fixed;inset:0;background:rgba(10,10,12,.88);display:none;flex-direction:column;z-index:50}
+  .modal{position:fixed;inset:0;background:#0b0b0d;display:none;flex-direction:column;z-index:50}
   .modal.open{display:flex}
-  .mhead{display:flex;align-items:center;gap:14px;padding:12px 18px;color:var(--text2)}
-  .mhead b{color:var(--text)}
-  .mhead .legend{display:flex;gap:16px;margin-left:auto}
-  .mhead .legend span::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--text3)}
-  .mhead .legend span:last-child::before{background:var(--fixed)}
-  .cmp{flex:1;position:relative;margin:0 18px 18px;overflow:hidden;border-radius:10px;background:#000;display:grid;place-items:center;touch-action:none;user-select:none}
-  .cmp img{position:absolute;max-width:100%;max-height:100%;width:auto;height:auto;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none}
+  .mhead{display:flex;align-items:center;gap:10px;padding:10px 18px;color:var(--text2);flex-wrap:wrap}
+  .mhead b{color:var(--text);max-width:26vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mhead .nav{padding:4px 11px;font-size:17px;line-height:1.1}
+  .mbody{flex:1;display:flex;min-height:0;margin:0 18px;gap:14px}
+  .cmp{flex:1;min-width:0;position:relative;overflow:hidden;border-radius:10px;background:#000;touch-action:none;user-select:none}
+  .cmp.pan{cursor:grab}.cmp.panning{cursor:grabbing}
+  .cmp .layer{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+  .cmp .layer img,.cmp .layer canvas{position:absolute;left:0;top:0;transform-origin:0 0;max-width:none}
+  .cmp.px .layer img,.cmp .layer canvas{image-rendering:pixelated}
   .cmp .after{clip-path:inset(0 0 0 var(--cut,50%))}
-  .cmp .handle{position:absolute;top:0;bottom:0;left:var(--cut,50%);width:2px;background:var(--text);transform:translateX(-1px);pointer-events:none}
+  .cmp.diff.over #mAfter{filter:grayscale(1) brightness(.4)}
+  .cmp .handle{position:absolute;top:0;bottom:0;left:var(--cut,50%);width:30px;transform:translateX(-15px);cursor:ew-resize}
+  .cmp .handle::before{content:"";position:absolute;top:0;bottom:0;left:14px;width:2px;background:var(--text)}
   .cmp .handle::after{content:"◂ ▸";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--text);color:var(--ink);border-radius:999px;padding:5px 9px;font-size:11px;font-weight:600;letter-spacing:1px;white-space:nowrap}
-  .cmp .lab{position:absolute;bottom:12px;background:rgba(20,20,22,.8);border-radius:6px;padding:4px 9px;font-size:12px;color:var(--text2)}
+  .cmp .lab{position:absolute;bottom:12px;background:rgba(20,20,22,.8);border-radius:6px;padding:4px 9px;font-size:12px;color:var(--text2);pointer-events:none}
   .cmp .lab.l{left:12px}.cmp .lab.r{right:12px;color:var(--fixed)}
-  .cmp .zoom{position:absolute;top:12px;right:12px;display:flex;gap:6px}
+  .cmp .bar{position:absolute;top:12px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--text2);max-width:calc(100% - 24px)}
+  .cmp .bar.tl{left:12px}.cmp .bar.tr{right:12px;top:auto;bottom:44px}
+  .cmp .bar button,.cmp .bar select,.cmp .bar .pill{padding:5px 10px;background:rgba(27,27,30,.92);border-radius:7px}
+  .cmp .bar select{width:auto}
+  .cmp .bar button.on{border-color:var(--safelight);color:var(--safelight)}
+  .cmp .bar .pill{display:inline-flex;align-items:center;gap:6px}
+  .cmp .bar .pill input{accent-color:var(--safelight)}
+  .cmp .flag{position:absolute;top:56px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--ink);font-weight:600;border-radius:999px;padding:5px 14px;font-size:12.5px;pointer-events:none}
+  .cmp .flag.after{background:var(--fixed)}
+  .cmp .mark{position:absolute;border:2px solid var(--bad);border-radius:4px;box-shadow:0 0 0 1px rgba(0,0,0,.6);pointer-events:none}
+  .side{width:300px;flex:none;background:var(--paper);border:1px solid var(--rule);border-radius:10px;padding:14px 16px;overflow:auto;font-size:13px}
+  .side h3{margin:18px 0 8px;font-size:13px;font-weight:600;color:var(--text2)}
+  .side dl{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;margin:0}
+  .side dt{color:var(--text2)}.side dd{margin:0;text-align:right;font-weight:500}
+  .side .verdict{font-size:15px;font-weight:600}
+  .side p{margin:6px 0 0;color:var(--text3);font-size:12px;line-height:1.5}
+  .tmap{display:grid;gap:2px;margin-top:4px}
+  .tmap button{aspect-ratio:var(--ar,1);padding:0;border:0;border-radius:2px;min-width:0}
+  .tmap button:hover{outline:2px solid var(--text)}
+  .tmap button.worst{outline:2px solid var(--bad)}
+  .mfoot{padding:8px 18px 12px;font-size:12px;color:var(--text3);display:flex;gap:16px;flex-wrap:wrap}
+  .mfoot kbd{font:inherit;color:var(--text2);border:1px solid var(--rule2);border-radius:4px;padding:0 5px;margin-right:3px}
+  @media (max-width:900px){.side{display:none}}
   .toast{position:fixed;bottom:60px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--paper2);border:1px solid var(--rule2);padding:9px 14px;border-radius:8px;opacity:0;transition:.2s;pointer-events:none;z-index:60}
   .toast.show{opacity:1;transform:translateX(-50%)}
   @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
@@ -281,7 +307,7 @@
         <summary>Manual settings</summary>
         <div class="two">
           <label class="field"><span>Output format</span>
-            <select id="output_format"><option value="jpeg">JPEG</option><option value="webp">WebP</option><option value="keep">Keep original</option></select></label>
+            <select id="output_format"><option value="jpeg">JPEG</option><option value="webp">WebP</option><option value="avif">AVIF</option><option value="keep">Keep original</option></select></label>
           <label class="field"><span>Aim under limit by</span>
             <div style="position:relative"><input type="number" id="margin_pct" step="0.5" min="0" max="50"><span style="position:absolute;right:10px;top:7px;color:var(--text3)">%</span></div></label>
         </div>
@@ -299,7 +325,11 @@
           <label class="field"><span>Shrink step</span><input type="number" id="resize_step_pct" min="1" max="50"></label>
           <label class="field"><span>Smallest long edge (px)</span><input type="number" id="min_long_edge" min="16" step="10"></label>
         </div>
+        <div class="hint" id="fmtHint"></div>
+        <label class="field"><span>AVIF effort</span>
+          <select id="avif_speed"><option value="8">Fast</option><option value="6">Balanced</option><option value="4">Smaller files (slow)</option><option value="2">Smallest (very slow)</option></select></label>
         <label class="check"><input type="checkbox" id="progressive">Progressive JPEG</label>
+        <label class="check"><input type="checkbox" id="measure_quality">Score quality of each photo (match)</label>
         <label class="check"><input type="checkbox" id="strip_metadata">Remove metadata (EXIF, GPS)</label>
         <div class="two">
           <label class="field"><span>If a file already exists</span>
@@ -388,24 +418,48 @@
 <div class="modal" id="modal" role="dialog" aria-modal="true" aria-label="Before and after">
   <div class="mhead">
     <button class="quiet" id="mClose">← Back</button>
+    <button class="nav" id="mPrev" title="Previous photo (←)" aria-label="Previous photo">‹</button>
+    <span id="mPos"></span>
+    <button class="nav" id="mNext" title="Next photo (→)" aria-label="Next photo">›</button>
     <b id="mName"></b><span id="mInfo"></span>
-    <div class="legend"><span>Original</span><span>Compressed</span></div>
+    <span class="spacer"></span>
+    <div class="seg" id="mModes" aria-label="Compare mode">
+      <button data-m="slider" class="on" title="Drag a divider between original and compressed (S)">Slider</button>
+      <button data-m="flicker" title="Flip between the two in place (F, then Space)">Flicker</button>
+      <button data-m="diff" title="Show where the pixels changed (D)">Difference</button>
+    </div>
+    <button id="mDetails" title="Show or hide the numbers (I)">Details</button>
     <button id="mSave" title="Compress this photo into a folder you choose">Save to…</button>
   </div>
-  <div class="cmp" id="cmp">
-    <img class="before" id="mBefore" alt="Original">
-    <img class="after" id="mAfter" alt="Compressed">
-    <div class="handle"></div>
-    <div class="lab l" id="mLabL"></div><div class="lab r" id="mLabR"></div>
-    <div class="zoom"><button id="mFit">Fit</button><button id="m100">100%</button></div>
-    <div class="pv" id="mPv"><button id="mPreview" title="Run the current settings on this photo in memory. Nothing is saved.">Preview with current settings</button><span id="mPvState"></span></div>
+  <div class="mbody">
+    <div class="cmp" id="cmp">
+      <div class="layer"><img id="mBefore" alt="Original"></div>
+      <div class="layer after" id="lAfter"><img id="mAfter" alt="Compressed"><canvas id="mHeat"></canvas></div>
+      <div class="mark hidden" id="mMark"></div>
+      <div class="handle" id="mHandle"></div>
+      <div class="flag hidden" id="mFlag"></div>
+      <div class="lab l" id="mLabL"></div><div class="lab r" id="mLabR"></div>
+      <div class="bar tl">
+        <button id="mPreview" title="Run the current settings on this photo in memory. Nothing is saved.">Preview with current settings</button>
+        <select id="mGain" class="hidden" title="How much to amplify the differences" aria-label="Difference amplification"><option value="4">Amplify ×4</option><option value="8">Amplify ×8</option><option value="16" selected>Amplify ×16</option><option value="32">Amplify ×32</option><option value="64">Amplify ×64</option></select>
+        <button id="mOver" class="hidden" title="Draw the differences on top of the dimmed photo">Over photo</button>
+        <label class="pill hidden" id="mAutoWrap"><input type="checkbox" id="mAuto">Auto flip</label>
+        <span id="mPvState"></span>
+      </div>
+      <div class="bar tr">
+        <span class="pill" id="mZoomLab">Fit</span><button id="mFit">Fit</button><button data-z="1">100%</button><button data-z="2">200%</button><button data-z="4">400%</button>
+        <button id="mWorst" disabled title="Zoom to the area that lost the most (W)">Worst area</button>
+      </div>
+    </div>
+    <aside class="side" id="mSide" aria-label="Details"></aside>
   </div>
+  <div class="mfoot"><span><kbd>Scroll</kbd>zoom</span><span><kbd>Drag</kbd>pan when zoomed</span><span><kbd>←</kbd><kbd>→</kbd>photos</span><span><kbd>S</kbd><kbd>F</kbd><kbd>D</kbd>modes</span><span><kbd>Space</kbd>flip</span><span><kbd>W</kbd>worst area</span><span><kbd>0</kbd>fit</span><span><kbd>1</kbd>100%</span><span><kbd>I</kbd>details</span></div>
 </div>
 <div class="toast" id="toast"></div>
 
 <script>
 const $ = id => document.getElementById(id);
-const MANUAL_KEYS = ["margin_pct","output_format","quality_max","quality_min","subsampling","allow_resize","resize_step_pct","min_long_edge","progressive","strip_metadata","output_folder","on_conflict","workers"];
+const MANUAL_KEYS = ["margin_pct","output_format","quality_max","quality_min","subsampling","allow_resize","resize_step_pct","min_long_edge","progressive","strip_metadata","output_folder","on_conflict","workers","avif_speed","measure_quality"];
 let defaults=null, mode="auto", view="grid", filter="all";
 let files=[];                 // {path,name,bytes}
 const items=new Map();        // key -> {f, card, row, res, state}
@@ -416,8 +470,8 @@ const fmtMB=b=>(b/MB).toFixed(b<10*MB?2:1)+" MB";
 const fmtBig=b=>b>=1073741824?(b/1073741824).toFixed(2)+" GB":fmtMB(b);
 const key=p=>p.toLowerCase();
 const thumbUrl=(p,s)=>`/api/thumb?path=${encodeURIComponent(p)}&size=${s}`;
-// Real pixels when the browser can show the format; otherwise a large thumbnail.
-const rawUrl=p=>/\.(jpe?g|png|webp|gif|bmp)$/i.test(p)?`/api/file?path=${encodeURIComponent(p)}`:thumbUrl(p,2400);
+// Real pixels. The server renders formats browsers can't show (HEIC, TIFF) to lossless PNG.
+const rawUrl=p=>`/api/file?path=${encodeURIComponent(p)}`;
 // SSIM bands. Tuned on 4K photos: q90–95 at 4:4:4 lands ~0.98–0.995, visible blocking starts below ~0.93.
 function verdict(ssim){
   if(ssim==null) return null;
@@ -434,7 +488,10 @@ const api=async(url,body,method="POST")=>{
 };
 
 /* ---------------- settings ---------------- */
-function setForm(s){ $("max_mb").value=s.max_mb; for(const k of MANUAL_KEYS){const el=$(k); if(el.type==="checkbox") el.checked=!!s[k]; else el.value=s[k];} }
+function fmtHint(){ const v=$("output_format").value; $("avif_speed").closest("label").classList.toggle("hidden",v!=="avif");
+    $("fmtHint").textContent={avif:"AVIF gives the smallest files but is slow to encode and not accepted everywhere. Its quality scale is not JPEG’s: try a floor of 50–60.",webp:"WebP is smaller than JPEG and works in every modern browser.",keep:"Each photo stays in its own format. HEIC, TIFF, BMP and GIF are saved as JPEG.",jpeg:caps.heic?"JPEG works everywhere. HEIC photos from phones can be added too.":"JPEG works everywhere."}[v]||""; }
+function setForm(s){ setFormRaw(s); fmtHint(); }
+function setFormRaw(s){ $("max_mb").value=s.max_mb; for(const k of MANUAL_KEYS){const el=$(k); if(el.type==="checkbox") el.checked=!!s[k]; else el.value=s[k];} }
 function readAll(){ const s={max_mb:parseFloat($("max_mb").value)||8}; for(const k of MANUAL_KEYS){const el=$(k); s[k]=el.type==="checkbox"?el.checked:(el.type==="number"?parseFloat(el.value):el.value);} return s; }
 function readSettings(){ return mode==="auto"?{max_mb:parseFloat($("max_mb").value)||8}:readAll(); }
 function setMode(m){ mode=m; $("modeAuto").classList.toggle("on",m==="auto"); $("modeManual").classList.toggle("on",m==="manual"); $("manualBox").open=(m==="manual"); $("manualBox").classList.toggle("hidden",m==="auto"); $("autoHint").classList.toggle("hidden",m==="manual"); if(m==="manual"&&$("app").classList.contains("railless")) toggleRail(true); save("bc.mode",m); }
@@ -713,68 +770,212 @@ async function tick(){
 }
 
 /* ---------------- compare ---------------- */
-const cmp=$("cmp"); let cut=50, zoom="fit", pvUrl=null, pvToken=0;
-function showAfter(src,r,label){
-  const after=$("mAfter");
-  after.src=src; after.style.display="";
-  cmp.style.setProperty("--cut","50%"); cut=50; cmp.querySelector(".handle").style.display="";
-  const v=verdict(r.ssim);
-  $("mInfo").textContent=` ${fmtMB(r.original_bytes)} → ${fmtMB(r.new_bytes)}`+(r.quality?`, quality ${r.quality}`:"")+`, ${r.width}×${r.height}`+(v?`, match ${fmtMatch(r.ssim)} (${v})`:"")+(r.status==="over_limit"?", still over limit":"");
-  $("mLabL").textContent="Original "+fmtMB(r.original_bytes); $("mLabR").textContent=label+" "+fmtMB(r.new_bytes);
+const cmp=$("cmp"), DPR=()=>window.devicePixelRatio||1;
+let caps={avif:true,heic:true,analysis:true};
+let cut=50, cmode="slider", over=false, flipAfter=true, autoTimer=null, anTimer=null, pvUrl=null, pvToken=0, mark=null, drag=null;
+let cur=null;                       // what the screen shows: {f, r, previewId, an}
+const V={s:1,tx:0,ty:0,W:0,H:0,fit:true};   // view: scale + offset of the image box inside the viewport
+const hasAfter=()=>!!(cur&&cur.r);
+const centre=()=>{ const b=cmp.getBoundingClientRect(); return [b.width/2,b.height/2]; };
+
+/* --- zoom & pan: both layers share one transform, so they can never drift apart --- */
+function fitScale(){ const b=cmp.getBoundingClientRect(); return V.W?Math.min(b.width/V.W,b.height/V.H):1; }
+function applyView(){
+  if(!V.W) return;
+  const b=cmp.getBoundingClientRect(), w=V.W*V.s, h=V.H*V.s;
+  V.tx=w<=b.width?(b.width-w)/2:Math.min(0,Math.max(b.width-w,V.tx));
+  V.ty=h<=b.height?(b.height-h)/2:Math.min(0,Math.max(b.height-h,V.ty));
+  const t=`translate(${V.tx}px,${V.ty}px) scale(${V.s})`;
+  for(const el of [$("mBefore"),$("mAfter"),$("mHeat")]){ el.style.width=V.W+"px"; el.style.height=V.H+"px"; el.style.transform=t; }
+  const pct=Math.round(V.s*DPR()*100);
+  cmp.classList.toggle("px",pct>=200); cmp.classList.toggle("pan",!V.fit);
+  $("mZoomLab").textContent=V.fit?`Fit · ${pct}%`:pct+"%";
+  const m=$("mMark"); m.classList.toggle("hidden",!mark);
+  if(mark){ m.style.left=(V.tx+mark.x*V.s)+"px"; m.style.top=(V.ty+mark.y*V.s)+"px"; m.style.width=(mark.w*V.s)+"px"; m.style.height=(mark.h*V.s)+"px"; }
 }
-function clearPreview(){ pvToken++; if(pvUrl){URL.revokeObjectURL(pvUrl);pvUrl=null;} $("mPvState").textContent=""; $("mPreview").disabled=false; }
-function openCompare(f){
-  clearPreview();
-  const it=items.get(key(f.path)); const r=it&&it.res;
-  $("mName").textContent=f.name; $("mName").dataset.path=f.path;
+function fitView(){ V.fit=true; V.s=fitScale(); V.tx=V.ty=0; applyView(); }
+function zoomAt(ns,cx,cy){     // keep the point under (cx,cy) fixed while the scale changes
+  const min=fitScale(), max=Math.max(min,8/DPR()); ns=Math.max(min,Math.min(max,ns));
+  const k=ns/V.s; V.tx=cx-(cx-V.tx)*k; V.ty=cy-(cy-V.ty)*k; V.s=ns; V.fit=ns<=min*1.001; applyView();
+}
+function zoomTo(z,ix,iy){      // z=1: one image pixel per screen pixel, centred on image point (ix,iy)
+  const [cx,cy]=centre(), min=fitScale(), ns=Math.max(min,z/DPR());
+  V.s=ns; V.fit=ns<=min*1.001; V.tx=cx-ix*ns; V.ty=cy-iy*ns; applyView();
+}
+function layoutView(){         // the image box is the compressed file's pixel grid; a resized original is stretched onto it
+  const a=$("mAfter"), b=$("mBefore");
+  const W=(hasAfter()&&a.naturalWidth)||b.naturalWidth, H=(hasAfter()&&a.naturalHeight)||b.naturalHeight;
+  if(!W) return;
+  const changed=W!==V.W||H!==V.H; V.W=W; V.H=H;
+  if(V.fit||changed) fitView(); else applyView();
+}
+$("mBefore").onload=$("mAfter").onload=layoutView;
+window.addEventListener("resize",()=>{ if($("modal").classList.contains("open")) V.fit?fitView():applyView(); });
+
+/* --- modes --- */
+function setCut(p){ cut=Math.max(0,Math.min(100,p)); cmp.style.setProperty("--cut",cut+"%"); }
+function showFlip(a){ flipAfter=a; cmp.style.setProperty("--cut",a?"0%":"100%"); const fl=$("mFlag"); fl.textContent=a?(cur&&cur.previewId?"Preview":"Compressed"):"Original"; fl.classList.toggle("after",a); }
+function labels(){
+  const r=cur&&cur.r;
+  $("mLabL").textContent=r?"Original "+fmtMB(r.original_bytes):"Original";
+  $("mLabR").textContent=!r?"":cmode==="diff"?"Difference ×"+$("mGain").value:(cur.previewId?"Preview ":"Compressed ")+fmtMB(r.new_bytes);
+  $("mLabL").classList.toggle("hidden",cmode==="flicker"); $("mLabR").classList.toggle("hidden",cmode==="flicker"||!r);
+  $("mInfo").textContent=r?` ${fmtMB(r.original_bytes)} → ${fmtMB(r.new_bytes)}`+(r.quality?`, quality ${r.quality}`:"")+(verdict(r.ssim)?`, match ${fmtMatch(r.ssim)}`:"")+(r.status==="over_limit"?", still over limit":""):(cur?` ${fmtMB(cur.f.bytes)}, not compressed yet`:"");
+}
+function setCMode(m){
+  if(m!=="slider"&&!hasAfter()){ toast("Compress or preview this photo first"); m="slider"; }
+  cmode=m; clearInterval(autoTimer); autoTimer=null;
+  document.querySelectorAll("#mModes button").forEach(b=>b.classList.toggle("on",b.dataset.m===m));
+  cmp.classList.toggle("diff",m==="diff");
+  $("lAfter").style.display=hasAfter()?"":"none";
+  $("mHandle").classList.toggle("hidden",m==="flicker"||!hasAfter());
+  $("mFlag").classList.toggle("hidden",m!=="flicker"); $("mAutoWrap").classList.toggle("hidden",m!=="flicker");
+  $("mGain").classList.toggle("hidden",m!=="diff"); $("mOver").classList.toggle("hidden",m!=="diff");
+  $("mHeat").style.display=m==="diff"?"":"none";
+  $("mAfter").style.display=m!=="diff"||over?"":"none";
+  if(m==="flicker"){ showFlip(flipAfter); if($("mAuto").checked) autoTimer=setInterval(()=>showFlip(!flipAfter),700); }
+  else setCut(cut);
+  if(m==="diff"){ if(cur.an) drawHeat(); else loadAnalysis(); }
+  labels();
+}
+$("mModes").onclick=e=>{ const b=e.target.closest("button"); if(b) setCMode(b.dataset.m); };
+$("mAuto").onchange=()=>setCMode(cmode);
+$("mOver").onclick=()=>{ over=!over; $("mOver").classList.toggle("on",over); cmp.classList.toggle("over",over); setCMode(cmode); };
+$("mGain").onchange=()=>{ save("bc.gain",$("mGain").value); drawHeat(); labels(); };
+
+/* --- difference map: the server sends raw per-pixel differences, colour and gain are applied here --- */
+const LUT=(()=>{ const st=[[0,0,0,0],[.2,45,20,110],[.45,190,45,100],[.7,245,140,40],[1,255,248,200]], out=new Uint8Array(768);
+  for(let i=0;i<256;i++){ const t=i/255; let k=1; while(k<st.length-1&&t>st[k][0]) k++; const a=st[k-1], b=st[k], u=(t-a[0])/(b[0]-a[0]);
+    for(let c=0;c<3;c++) out[i*3+c]=Math.round(a[c+1]+(b[c+1]-a[c+1])*u); }
+  return out; })();
+function drawHeat(){
+  const an=cur&&cur.an; if(!an) return;
+  const cv=$("mHeat"); cv.width=an.img.naturalWidth; cv.height=an.img.naturalHeight;
+  const cx=cv.getContext("2d",{willReadFrequently:true}); cx.drawImage(an.img,0,0);
+  const id=cx.getImageData(0,0,cv.width,cv.height), d=id.data, g=+$("mGain").value;
+  for(let i=0;i<d.length;i+=4){ const v=Math.min(255,d[i]*g); d[i]=LUT[v*3]; d[i+1]=LUT[v*3+1]; d[i+2]=LUT[v*3+2]; d[i+3]=over?Math.min(255,v*3):255; }
+  cx.putImageData(id,0,0); applyView();
+}
+function loadAnalysis(){
+  clearTimeout(anTimer); if(!cur||!cur.r||cur.an||!caps.analysis) return;
+  const mine=cur;
+  anTimer=setTimeout(async()=>{            // short delay so arrowing quickly through photos doesn't queue work
+    try{
+      const an=await api("/api/analyze",mine.previewId?{path:mine.f.path,preview_id:mine.previewId}:{path:mine.f.path,destination:mine.r.destination});
+      an.img=new Image(); await new Promise((ok,no)=>{ an.img.onload=ok; an.img.onerror=no; an.img.src=an.diff; }); delete an.diff;
+      if(cur!==mine) return;
+      mine.an=an; $("mWorst").disabled=false; renderSide(); if(cmode==="diff") drawHeat();
+    }catch(e){ if(cur===mine){ mine.anErr=e.message||"failed"; renderSide(); } }
+  },200);
+}
+function jumpTile(i){ const t=cur&&cur.an&&cur.an.tiles[i]; if(!t) return; mark=t; zoomTo(1,t.x+t.w/2,t.y+t.h/2); }
+$("mWorst").onclick=()=>{ if(cur&&cur.an) jumpTile(cur.an.worst); };
+
+/* --- details panel --- */
+const tileColor=v=>{ const i=Math.round(30+Math.max(0,Math.min(1,(1-v)/0.12))*225); return `rgb(${LUT[i*3]},${LUT[i*3+1]},${LUT[i*3+2]})`; };
+function renderSide(){
+  const el=$("mSide"); if(!cur){ el.innerHTML=""; return; }
+  const f=cur.f, r=cur.r, an=cur.an, row=(k,v)=>`<dt>${k}</dt><dd>${v}</dd>`, ext=n=>escHtml((n.split(".").pop()||"").toUpperCase());
+  if(!r){ el.innerHTML=`<div class="verdict">Not compressed yet</div><p>Use <b>Preview with current settings</b> to see what the current settings would do to this photo. Nothing is saved.</p><h3>Original</h3><dl>${row("Size",fmtMB(f.bytes))}${row("Format",ext(f.name))}</dl>`; return; }
+  const v=verdict(r.ssim), pct=r.original_bytes?Math.round((1-r.new_bytes/r.original_bytes)*100):0, resized=r.width!==r.orig_width||r.height!==r.orig_height;
+  const say={excellent:"Excellent match",good:"Good match",check:"Worth a close look"}[v]||(r.status==="copied"?"Unchanged copy":"Not scored");
+  const why={excellent:"Differences should be invisible at normal viewing size.",good:"Small losses that only show when zoomed in.",check:"Some areas lost visible detail. Check the worst area."}[v]||"";
+  let h=`<div class="verdict match ${v||""}">${say}</div><p style="margin-top:2px">${why}</p>`;
+  h+=`<h3>File</h3><dl>${row("Original",`${fmtMB(r.original_bytes)} · ${ext(f.name)}`)}${row(cur.previewId?"Preview":"Compressed",`${fmtMB(r.new_bytes)} · ${escHtml(r.format||"")||ext(r.destination||"")}`)}${row("Saved",pct+"%")}${row("Pixels",`${r.orig_width}×${r.orig_height}`+(resized?` → ${r.width}×${r.height}`:""))}${resized?row("Scaled to",Math.round(r.width/r.orig_width*100)+"%"):""}${row("Quality setting",r.quality??"—")}${r.status==="over_limit"?row("Size limit","still over"):""}</dl>`;
+  h+=`<h3>Fidelity</h3><dl>${row("Match (SSIM)",`<span class="match ${v||""}">${fmtMatch(r.ssim)}</span>`)}`;
+  if(an){
+    const w=an.tiles[an.worst];
+    h+=row("Worst area",`<span class="match ${verdict(w.ssim)}">${fmtMatch(w.ssim)}</span>`)+row("PSNR",an.psnr==null?"identical":an.psnr.toFixed(1)+" dB")+row("Pixels changed",an.changed_pct.toFixed(1)+"%")+row("Average change",an.mean_diff.toFixed(2)+" / 255")+row("Largest change",an.max_diff+" / 255")+`</dl>`;
+    h+=`<p>PSNR above about 40 dB is usually invisible. “Pixels changed” counts pixels that moved by more than 2 levels out of 255.${resized?" Scores compare against the original scaled to the new size, so the drop in resolution itself is not counted.":""}</p>`;
+    h+=`<h3>Where it changed</h3><div class="tmap" style="grid-template-columns:repeat(${an.cols},1fr);--ar:${((an.width/an.cols)/(an.height/an.rows)).toFixed(3)}">`+an.tiles.map((t,i)=>`<button data-i="${i}"${i===an.worst?' class="worst"':""} style="background:${tileColor(t.ssim)}" title="Match ${fmtMatch(t.ssim)}" aria-label="Area ${i+1}, match ${fmtMatch(t.ssim)}"></button>`).join("")+`</div><p>Each square is one area of the photo; brighter means more was lost there. Click a square to zoom to it. The outlined one is the worst.</p>`;
+  } else h+=`</dl><p>${cur.anErr?"Analysis failed: "+escHtml(cur.anErr):caps.analysis?"Analysing…":"Detailed analysis isn’t available in this build."}</p>`;
+  el.innerHTML=h;
+}
+$("mSide").onclick=e=>{ const b=e.target.closest(".tmap button"); if(b) jumpTile(+b.dataset.i); };
+function toggleSide(){ const sd=$("mSide"); sd.classList.toggle("hidden"); save("bc.side",sd.classList.contains("hidden")?"0":"1"); V.fit?fitView():applyView(); }
+$("mDetails").onclick=toggleSide;
+
+/* --- open, navigate, preview --- */
+const navList=()=>files.filter(f=>!items.get(key(f.path)).card.classList.contains("hidden"));
+function clearPreview(){ pvToken++; if(pvUrl){ URL.revokeObjectURL(pvUrl); pvUrl=null; } $("mPvState").textContent=""; $("mPreview").disabled=false; }
+function openCompare(f,keepZoom=false){
+  clearPreview(); clearTimeout(anTimer); mark=null; if(!keepZoom) V.fit=true;
+  const it=items.get(key(f.path)), r=it&&it.res&&it.res.destination&&it.res.status!=="failed"?it.res:null;
+  cur={f,r,previewId:null,an:null};
+  $("mName").textContent=f.name; $("mName").dataset.path=f.path; $("mName").title=f.path;
+  const list=navList(), i=list.findIndex(x=>x.path===f.path);
+  $("mPos").textContent=i>=0?`${i+1} of ${list.length}`:""; $("mPrev").disabled=i<=0; $("mNext").disabled=i<0||i>=list.length-1;
   $("mBefore").src=rawUrl(f.path);
-  if(r&&r.destination&&r.status!=="failed"){
-    showAfter(rawUrl(r.destination),r,"Compressed");
-  } else {
-    const after=$("mAfter"); after.removeAttribute("src"); after.style.display="none"; cmp.querySelector(".handle").style.display="none";
-    $("mInfo").textContent=` ${fmtMB(f.bytes)}, not compressed yet`; $("mLabL").textContent="Original"; $("mLabR").textContent="";
-  }
-  $("mPreview").textContent=r&&r.destination?"Try current settings":"Preview with current settings";
-  setZoom("fit"); $("modal").classList.add("open"); $("mClose").focus();
+  if(r) $("mAfter").src=rawUrl(r.destination); else $("mAfter").removeAttribute("src");
+  $("mWorst").disabled=true; $("mPreview").textContent=r?"Try current settings":"Preview with current settings";
+  $("modal").classList.add("open");
+  setCMode(r?cmode:"slider"); renderSide(); loadAnalysis();
 }
+function nav(d){ if(!cur) return; const l=navList(), n=l[l.findIndex(x=>x.path===cur.f.path)+d]; if(n) openCompare(n,true); }
+$("mPrev").onclick=()=>nav(-1); $("mNext").onclick=()=>nav(1);
 $("mPreview").onclick=async()=>{
-  const path=$("mName").dataset.path; if(!path) return;
-  clearPreview(); const tok=pvToken;
+  if(!cur) return; const f=cur.f; clearPreview(); const tok=pvToken;
   $("mPreview").disabled=true; $("mPvState").textContent="Compressing in memory…";
   try{
-    const resp=await fetch("/api/preview",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path,settings:readSettings()})});
+    const resp=await fetch("/api/preview",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:f.path,settings:readSettings()})});
     if(!resp.ok) throw new Error((await resp.json().catch(()=>({detail:resp.statusText}))).detail);
     const r=JSON.parse(resp.headers.get("X-Result")), blob=await resp.blob();
-    if(tok!==pvToken) return;                     // modal moved on to another photo
-    pvUrl=URL.createObjectURL(blob);
-    showAfter(pvUrl,r,"Preview"); setZoom(zoom);
+    if(tok!==pvToken) return;                     // moved on to another photo meanwhile
+    pvUrl=URL.createObjectURL(blob); clearTimeout(anTimer); mark=null;
+    cur={f,r,previewId:r.preview_id,an:null}; $("mWorst").disabled=true;
+    $("mAfter").src=pvUrl; setCMode(cmode); renderSide(); loadAnalysis();
     $("mPvState").textContent="Preview only, nothing saved";
   }catch(e){ if(tok===pvToken) $("mPvState").textContent="Preview failed: "+e.message; }
   finally{ if(tok===pvToken) $("mPreview").disabled=false; }
 };
-// In 100% mode both layers get the compressed image's pixel width, so a resized output still lines up with the original.
-function setZoom(z){
-  zoom=z; const b=$("mBefore"), a=$("mAfter");
-  for(const im of [b,a]){ im.style.width=""; im.style.maxWidth=z==="fit"?"100%":"none"; im.style.maxHeight=z==="fit"?"100%":"none"; }
-  if(z==="100"){ const w=(a.style.display!=="none"&&a.naturalWidth)||b.naturalWidth; if(w){ b.style.width=a.style.width=w+"px"; } }
-  $("mFit").classList.toggle("on",z==="fit"); $("m100").classList.toggle("on",z==="100");
-}
-$("mAfter").onload=()=>{ if(zoom==="100") setZoom("100"); };
-$("mFit").onclick=()=>setZoom("fit"); $("m100").onclick=()=>setZoom("100");
-const closeModal=()=>{ $("modal").classList.remove("open"); clearPreview(); };
+const closeModal=()=>{ $("modal").classList.remove("open"); clearPreview(); clearInterval(autoTimer); autoTimer=null; clearTimeout(anTimer); cur=null; };
 $("mClose").onclick=closeModal;
-document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&$("modal").classList.contains("open")) closeModal(); if(e.key==="Enter"&&!$("modal").classList.contains("open")&&document.activeElement.tagName!=="TEXTAREA"&&!$("btnStart").disabled&&document.activeElement.tagName!=="BUTTON") $("btnStart").click(); });
-const move=e=>{ const b=cmp.getBoundingClientRect(); cut=Math.max(0,Math.min(100,(e.clientX-b.left)/b.width*100)); cmp.style.setProperty("--cut",cut+"%"); };
-let dragging=false;
-cmp.addEventListener("pointerdown",e=>{ if(e.target.closest("button")) return; dragging=true; cmp.setPointerCapture(e.pointerId); move(e); });
-cmp.addEventListener("pointermove",e=>{ if(dragging&&e.buttons) move(e); });
-cmp.addEventListener("pointerup",()=>{ dragging=false; });
+
+/* --- pointer & keys: drag the handle to compare, drag the photo to pan, scroll to zoom --- */
+const onControl=e=>!!e.target.closest("button,select,label,input");
+const moveCut=e=>{ const b=cmp.getBoundingClientRect(); setCut((e.clientX-b.left)/b.width*100); };
+cmp.addEventListener("pointerdown",e=>{
+  if(onControl(e)) return;
+  const canCut=cmode!=="flicker"&&hasAfter();
+  const kind=canCut&&(e.target.id==="mHandle"||V.fit)?"cut":(V.fit?"tap":"pan");
+  drag={kind,x:e.clientX,y:e.clientY,tx:V.tx,ty:V.ty,moved:false}; cmp.setPointerCapture(e.pointerId);
+  if(kind==="cut") moveCut(e); else if(kind==="pan") cmp.classList.add("panning");
+});
+cmp.addEventListener("pointermove",e=>{
+  if(!drag) return;
+  if(Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)>3) drag.moved=true;
+  if(drag.kind==="cut") moveCut(e);
+  else if(drag.kind==="pan"){ V.tx=drag.tx+e.clientX-drag.x; V.ty=drag.ty+e.clientY-drag.y; applyView(); }
+});
+cmp.addEventListener("pointerup",()=>{ if(drag&&cmode==="flicker"&&!drag.moved) showFlip(!flipAfter); drag=null; cmp.classList.remove("panning"); });
+cmp.addEventListener("pointercancel",()=>{ drag=null; cmp.classList.remove("panning"); });
+cmp.addEventListener("wheel",e=>{ e.preventDefault(); const b=cmp.getBoundingClientRect(); zoomAt(V.s*Math.exp(-e.deltaY*0.0015),e.clientX-b.left,e.clientY-b.top); },{passive:false});
+cmp.addEventListener("dblclick",e=>{ if(onControl(e)||e.target.id==="mHandle") return; const b=cmp.getBoundingClientRect(); if(V.fit) zoomAt(1/DPR(),e.clientX-b.left,e.clientY-b.top); else fitView(); });
+$("mFit").onclick=fitView;
+document.querySelectorAll("#cmp [data-z]").forEach(b=>b.onclick=()=>zoomAt(+b.dataset.z/DPR(),...centre()));
+document.addEventListener("keydown",e=>{
+  const open=$("modal").classList.contains("open");
+  if(open){
+    if(e.key!=="Escape"&&(/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)||e.ctrlKey||e.metaKey||e.altKey)) return;
+    const act={escape:closeModal,arrowleft:()=>nav(-1),arrowright:()=>nav(1),s:()=>setCMode("slider"),f:()=>setCMode("flicker"),d:()=>setCMode("diff"),
+      " ":()=>{ if(cmode!=="flicker") setCMode("flicker"); else showFlip(!flipAfter); },
+      w:()=>$("mWorst").click(), i:toggleSide, "0":fitView, "1":()=>zoomAt(1/DPR(),...centre()), "2":()=>zoomAt(2/DPR(),...centre()),
+      "+":()=>zoomAt(V.s*1.4,...centre()), "=":()=>zoomAt(V.s*1.4,...centre()), "-":()=>zoomAt(V.s/1.4,...centre())}[e.key.toLowerCase()];
+    if(act){ e.preventDefault(); act(); }
+    return;
+  }
+  if(e.key==="Enter"&&document.activeElement.tagName!=="TEXTAREA"&&!$("btnStart").disabled&&document.activeElement.tagName!=="BUTTON") $("btnStart").click();
+});
 
 /* ---------------- init ---------------- */
 (async()=>{
-  const d=await api("/api/defaults"); defaults=d.settings; $("cpu").textContent=d.cpu_count;
+  const d=await api("/api/defaults"); defaults=d.settings; $("cpu").textContent=d.cpu_count; caps={...caps,...(d.formats||{})};
+  if(!caps.avif){ const o=$("output_format").querySelector('[value="avif"]'); o.disabled=true; o.textContent="AVIF (not available)"; }
+  $("output_format").addEventListener("change",fmtHint);
+  if(load("bc.side","1")==="0") $("mSide").classList.add("hidden");
+  $("mGain").value=load("bc.gain","16");
   setForm({...defaults,...(load("bc.settings",{})||{})});
-  setMode(load("bc.mode","auto")); setView(load("bc.view","grid")); renderPresets();
+  setMode(load("bc.mode","auto")); setView(load("bc.view","grid")); renderPresets(); fmtHint();
   const ts=load("bc.thumb","200"); $("thumbSize").value=ts; document.documentElement.style.setProperty("--thumb",ts+"px");
   if(load("bc.rail","1")==="0") toggleRail(false);
   refreshCounts();

@@ -76,7 +76,10 @@ def index():
 
 @app.get("/api/defaults")
 def defaults():
-    return {"settings": auto_defaults().to_dict(), "cpu_count": os.cpu_count()}
+    from PIL import features
+    from compressor import engine, quality
+    return {"settings": auto_defaults().to_dict(), "cpu_count": os.cpu_count(),
+            "formats": {"avif": bool(features.check("avif")), "heic": engine.HEIC_OK, "analysis": quality.available()}}
 
 
 @app.post("/api/scan")
@@ -106,7 +109,7 @@ def browse(body: BrowseBody):
             if body.kind == "files":
                 paths = filedialog.askopenfilenames(
                     title="Select images",
-                    filetypes=[("Images", "*.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff"), ("All files", "*.*")],
+                    filetypes=[("Images", "*.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff *.avif *.heic *.heif"), ("All files", "*.*")],
                 )
                 result["paths"] = list(paths)
             else:
@@ -201,19 +204,55 @@ def thumb(path: str, size: int = 320):
 
 
 _BROWSER_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
-                  ".webp": "image/webp", ".gif": "image/gif", ".bmp": "image/bmp"}
+                  ".webp": "image/webp", ".gif": "image/gif", ".bmp": "image/bmp", ".avif": "image/avif"}
+
+_render_cache: "OrderedDict[tuple, bytes]" = OrderedDict()    # PNG renders of HEIC/TIFF for the compare screen
+_preview_cache: "OrderedDict[str, tuple]" = OrderedDict()     # preview_id -> (reference image, encoded bytes)
+_analysis_cache: "OrderedDict[tuple, dict]" = OrderedDict()
+_cache_lock = threading.Lock()
+
+
+def _cache_put(cache: OrderedDict, key, value, limit: int):
+    with _cache_lock:
+        cache[key] = value
+        cache.move_to_end(key)
+        while len(cache) > limit:
+            cache.popitem(last=False)
+
+
+def _cache_get(cache: OrderedDict, key):
+    with _cache_lock:
+        return cache.get(key)
 
 
 @app.get("/api/file")
 def raw_file(path: str):
     """The image's real bytes, for pixel-accurate before/after. Images only."""
     p = Path(path)
-    mt = _BROWSER_TYPES.get(p.suffix.lower())
-    if mt is None:
-        raise HTTPException(415, "not a browser-viewable image")
+    from compressor.engine import is_image
+    if not is_image(p):
+        raise HTTPException(415, "not an image")
     if not p.is_file():
         raise HTTPException(404, "file not found")
-    return FileResponse(p, media_type=mt, headers={"Cache-Control": "no-cache"})
+    mt = _BROWSER_TYPES.get(p.suffix.lower())
+    if mt is not None:
+        return FileResponse(p, media_type=mt, headers={"Cache-Control": "no-cache"})
+    # HEIC / TIFF: browsers can't show these, so render losslessly to PNG at full size.
+    key = (str(p).lower(), p.stat().st_mtime_ns)
+    data = _cache_get(_render_cache, key)
+    if data is None:
+        try:
+            with Image.open(p) as im:
+                im = ImageOps.exif_transpose(im)
+                if im.mode not in ("RGB", "RGBA", "L"):
+                    im = im.convert("RGBA" if "A" in im.mode else "RGB")
+                buf = io.BytesIO()
+                im.save(buf, "PNG", compress_level=1)
+                data = buf.getvalue()
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(415, f"cannot render: {e}")
+        _cache_put(_render_cache, key, data, 3)
+    return Response(data, media_type="image/png", headers={"Cache-Control": "no-cache"})
 
 
 class PreviewBody(BaseModel):
@@ -225,18 +264,65 @@ class PreviewBody(BaseModel):
 def preview(body: PreviewBody):
     """Compress one photo in memory with these settings and return the result. Writes nothing."""
     import json
-    from compressor.engine import preview as engine_preview, _format_for
+    import uuid
+    from compressor.engine import preview_full as engine_preview, _format_for
     p = Path(body.path)
     if not p.is_file():
         raise HTTPException(404, "file not found")
     settings = Settings.from_dict(body.settings)
     try:
-        data, result = engine_preview(str(p), settings)
+        data, result, ref = engine_preview(str(p), settings)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(415, f"cannot preview: {e}")
+    result["preview_id"] = uuid.uuid4().hex[:12]
+    _cache_put(_preview_cache, result["preview_id"], (ref, data), 2)
     _, ext = _format_for(p, settings)
     return Response(data, media_type=_BROWSER_TYPES.get(ext, "image/jpeg"),
                     headers={"X-Result": json.dumps(result), "Cache-Control": "no-store"})
+
+
+class AnalyzeBody(BaseModel):
+    path: str
+    destination: str | None = None
+    preview_id: str | None = None
+
+
+@app.post("/api/analyze")
+def analyze(body: AnalyzeBody):
+    """Detailed comparison for the compare screen: stats, tile map and a difference image."""
+    import base64
+    from compressor import quality
+    from compressor.engine import load_pair
+    if not quality.available():
+        raise HTTPException(501, "analysis needs numpy")
+    if body.preview_id:
+        key = ("preview", body.preview_id)
+    elif body.destination and Path(body.destination).is_file() and Path(body.path).is_file():
+        key = (body.path.lower(), body.destination.lower(), Path(body.destination).stat().st_mtime_ns)
+    else:
+        raise HTTPException(404, "nothing to compare")
+    out = _cache_get(_analysis_cache, key)
+    if out is None:
+        try:
+            if body.preview_id:
+                hit = _cache_get(_preview_cache, body.preview_id)
+                if hit is None:
+                    raise HTTPException(404, "preview expired, run it again")
+                ref, data = hit
+                with Image.open(io.BytesIO(data)) as e:
+                    enc = e.convert("RGB")
+            else:
+                ref, enc = load_pair(body.path, body.destination)
+            out, diff = quality.analyze(ref, enc)
+        except HTTPException:
+            raise
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(415, f"cannot analyze: {e}")
+        buf = io.BytesIO()
+        diff.save(buf, "PNG", compress_level=3)
+        out["diff"] = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+        _cache_put(_analysis_cache, key, out, 8)
+    return out
 
 
 @app.post("/api/reset")

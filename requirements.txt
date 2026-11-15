@@ -3,6 +3,7 @@ uvicorn>=0.27
 Pillow>=10.0
 pywebview>=5.0   # desktop window (app.py)
 pyinstaller>=6.0 # build.bat only
+pillow-heif>=0.16 # HEIC/HEIF input (iPhone photos); optional
 numpy>=1.26      # quality score (SSIM); optional at runtime, required for tests
 pytest>=8.0      # tests only
 httpx>=0.27      # tests only (FastAPI TestClient)
