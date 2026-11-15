@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Batch Compressor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#141416; --paper:#1b1b1e; --paper2:#222226; --rule:#2d2d33; --rule2:#3a3a42;
+    --text:#ebe9e4; --text2:#a7a49c; --text3:#6f6d67;
+    --safelight:#f0b544; --safelight-dim:rgba(240,181,68,.14);
+    --fixed:#86d58a; --fixed-dim:rgba(134,213,138,.14);
+    --warn:#f0b544; --bad:#ef6b6b; --bad-dim:rgba(239,107,107,.14);
+    --rail:300px; --top:60px; --foot:46px;
+    --thumb:200px;
+    font-synthesis:none;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--ink);color:var(--text);font:14px/1.45 "IBM Plex Sans",system-ui,sans-serif;font-variant-numeric:tabular-nums;overflow:hidden}
+  button,input,select{font:inherit;color:inherit}
+  button{background:var(--paper2);border:1px solid var(--rule);border-radius:7px;padding:7px 12px;cursor:pointer;transition:border-color .12s,background .12s}
+  button:hover{border-color:var(--rule2)}
+  button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--safelight);outline-offset:1px}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button.go{background:var(--text);color:var(--ink);border-color:var(--text);font-weight:600;padding:8px 18px}
+  button.go:hover{background:#fff}
+  button.quiet{background:transparent;border-color:transparent;color:var(--text2)}
+  button.quiet:hover{color:var(--text);border-color:var(--rule)}
+  button.stop{border-color:var(--bad);color:var(--bad);background:transparent}
+  input[type=text],input[type=number],select{background:var(--ink);border:1px solid var(--rule);border-radius:7px;padding:7px 10px;width:100%}
+  input[type=number]{-moz-appearance:textfield}
+
+  /* ---------- shell ---------- */
+  .app{display:grid;grid-template-rows:var(--top) 1fr var(--foot);grid-template-columns:var(--rail) 1fr;height:100vh;transition:grid-template-columns .22s}
+  .app.railless{grid-template-columns:0 1fr}
+  .top{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:0 18px;border-bottom:1px solid var(--rule);background:var(--paper)}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:-.01em;margin-right:6px}
+  .brand svg{width:22px;height:22px}
+  .limit{display:flex;align-items:center;gap:8px;background:var(--ink);border:1px solid var(--rule);border-radius:9px;padding:4px 6px 4px 12px}
+  .limit span{color:var(--text2)}
+  .limit input{width:76px;border:0;background:transparent;font-size:18px;font-weight:600;padding:2px 4px;text-align:right}
+  .limit b{font-weight:500;color:var(--text2);padding-right:6px}
+  .seg{display:inline-flex;background:var(--ink);border:1px solid var(--rule);border-radius:9px;padding:3px}
+  .seg button{border:0;background:transparent;border-radius:6px;padding:5px 12px;color:var(--text2)}
+  .seg button.on{background:var(--paper2);color:var(--text)}
+  .spacer{flex:1}
+  .top .count{color:var(--text2)}
+
+  /* ---------- rail ---------- */
+  .rail{border-right:1px solid var(--rule);background:var(--paper);overflow:hidden auto;width:var(--rail);min-height:0}
+  .railless .rail{visibility:hidden}
+  .rail section{padding:16px 16px 14px;border-bottom:1px solid var(--rule)}
+  .rail h2{margin:0 0 10px;font-size:13px;font-weight:600;color:var(--text2)}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .field{display:block;margin:10px 0 0}
+  .field>span{display:block;font-size:12px;color:var(--text2);margin-bottom:4px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .check{display:flex;align-items:center;gap:8px;margin:10px 0 0;cursor:pointer}
+  .check input{width:15px;height:15px;accent-color:var(--safelight)}
+  textarea{width:100%;min-height:62px;resize:vertical;background:var(--ink);color:var(--text);border:1px solid var(--rule);border-radius:7px;padding:8px 10px;font:12px/1.4 ui-monospace,Consolas,monospace}
+  .drop{margin-top:10px;border:1.5px dashed var(--rule2);border-radius:9px;padding:14px;text-align:center;color:var(--text3);font-size:13px}
+  .drop.over{border-color:var(--safelight);color:var(--text);background:var(--safelight-dim)}
+  .hint{font-size:12px;color:var(--text3);margin-top:8px;line-height:1.5}
+  details.manual summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;color:var(--text2);font-size:13px;font-weight:600;padding:2px 0}
+  details.manual summary::-webkit-details-marker{display:none}
+  details.manual summary::after{content:"+";font-size:16px;color:var(--text3)}
+  details.manual[open] summary::after{content:"–"}
+
+  /* ---------- sheet ---------- */
+  .sheet{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--ink)}
+  .tools{display:flex;align-items:center;gap:10px;padding:10px 18px;border-bottom:1px solid var(--rule);flex-wrap:wrap}
+  .tools .chips{display:flex;gap:6px}
+  .chip{border-radius:999px;padding:4px 11px;font-size:12.5px;color:var(--text2);background:transparent;border:1px solid var(--rule)}
+  .chip.on{color:var(--text);background:var(--paper2);border-color:var(--rule2)}
+  .chip i{font-style:normal;color:var(--text3);margin-left:5px}
+  .chip.on i{color:var(--text2)}
+  .sizer{display:flex;align-items:center;gap:8px;color:var(--text2);font-size:12.5px}
+  .sizer input{width:110px;accent-color:var(--text2)}
+  .scroll{flex:1;min-height:0;overflow:auto;padding:18px;scroll-behavior:smooth}
+
+  /* selection */
+  .frame .pick{position:absolute;top:8px;left:8px;width:20px;height:20px;border-radius:6px;border:1.5px solid rgba(255,255,255,.7);background:rgba(20,20,22,.6);display:grid;place-items:center;opacity:0;transition:opacity .12s;cursor:pointer;z-index:2}
+  .frame:hover .pick,.frame.sel .pick,.selecting .frame .pick{opacity:1}
+  .frame.sel .pick{background:var(--safelight);border-color:var(--safelight)}
+  .frame.sel .pick::after{content:"";width:10px;height:6px;border-left:2px solid var(--ink);border-bottom:2px solid var(--ink);transform:translateY(-1px) rotate(-45deg)}
+  .frame.sel{border-color:var(--safelight);box-shadow:0 0 0 1px var(--safelight)}
+  .frame.sel.done{border-color:var(--safelight)}
+  .frame.dim{opacity:.45}
+  td.pk,th.pk{width:34px;padding-right:0}
+  td.pk input,th.pk input{width:15px;height:15px;accent-color:var(--safelight);cursor:pointer;display:block}
+  tr.sel td{background:var(--safelight-dim)}
+  .selbar{display:none;align-items:center;gap:8px;padding:5px 6px 5px 12px;background:var(--safelight-dim);border:1px solid rgba(240,181,68,.35);border-radius:9px;color:var(--text)}
+  .selbar.on{display:flex}
+  .selbar b{color:var(--safelight)}
+  .selbar button{padding:5px 10px}
+  .tools select{width:auto;padding:6px 28px 6px 10px;background:var(--paper2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23a7a49c' fill='none' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center;appearance:none;border-radius:7px}
+
+  /* results summary */
+  .summary{display:none;grid-template-columns:auto 1fr auto;gap:10px 28px;align-items:center;background:var(--paper);border:1px solid var(--rule);border-radius:12px;padding:16px 20px;margin-bottom:18px}
+  .summary.on{display:grid}
+  .summary .headline{font-size:28px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
+  .summary .headline small{display:block;font-size:13px;font-weight:400;color:var(--text2);letter-spacing:0;margin-top:4px}
+  .summary .ratio{display:flex;flex-direction:column;gap:6px;min-width:220px}
+  .summary .bars{display:grid;gap:4px}
+  .summary .bars div{height:10px;border-radius:5px;background:var(--rule2);position:relative;overflow:hidden}
+  .summary .bars div i{position:absolute;inset:0;width:var(--w,100%);background:var(--text3);border-radius:5px;transition:width .6s cubic-bezier(.2,.7,.2,1)}
+  .summary .bars div.after i{background:var(--fixed)}
+  .summary .ratio span{display:flex;justify-content:space-between;font-size:12.5px;color:var(--text2)}
+  .summary .facts{display:flex;gap:22px;flex-wrap:wrap;font-size:13px;color:var(--text2)}
+  .summary .facts b{display:block;font-size:16px;color:var(--text);font-weight:600}
+  .summary .facts b.warn{color:var(--safelight)}.summary .facts b.bad{color:var(--bad)}
+  .summary .acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+  @media (max-width:1100px){.summary{grid-template-columns:1fr 1fr}.summary .acts{grid-column:1/-1;justify-content:flex-start}}
+
+  /* grid of frames */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--thumb),1fr));gap:14px;align-content:start}
+  .frame{position:relative;background:var(--paper);border:1px solid var(--rule);border-radius:9px;overflow:hidden;cursor:pointer;outline:0;transition:border-color .15s,transform .25s cubic-bezier(.2,.7,.2,1.2)}
+  .frame:hover{border-color:var(--rule2)}
+  .frame:focus-visible{border-color:var(--safelight)}
+  .frame .img{aspect-ratio:1;background:var(--paper2);position:relative;overflow:hidden}
+  .frame img{width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(.9) brightness(.55) contrast(.9);transition:filter .5s ease,transform .5s ease;transform:scale(1.02)}
+  .frame.loading img{opacity:0}
+  .frame.working{border-color:var(--safelight)}
+  .frame.working img{filter:grayscale(.4) brightness(.8) sepia(.35);transform:scale(.97)}
+  .frame.working .img::after{content:"";position:absolute;inset:-40% 0;background:linear-gradient(180deg,transparent 0,rgba(240,181,68,.0) 42%,rgba(240,181,68,.35) 50%,rgba(240,181,68,0) 58%,transparent 100%);animation:sweep 1.1s linear infinite;mix-blend-mode:screen}
+  .frame.working .img::before{content:"";position:absolute;inset:0;box-shadow:inset 0 0 0 2px var(--safelight);opacity:.0;animation:pulse 1.1s ease-in-out infinite;z-index:1;pointer-events:none}
+  @keyframes sweep{from{transform:translateY(-35%)}to{transform:translateY(35%)}}
+  @keyframes pulse{50%{opacity:.6}}
+  .frame.done img,.frame.copied img,.frame.over_limit img{filter:none;transform:scale(1)}
+  .frame.done{animation:fix .45s cubic-bezier(.2,.7,.2,1.2)}
+  @keyframes fix{0%{transform:scale(.97)}60%{transform:scale(1.015)}100%{transform:scale(1)}}
+  .frame.failed img{filter:grayscale(1) brightness(.35)}
+  .frame.failed .img::after{content:"Couldn’t read";position:absolute;inset:0;display:grid;place-items:center;color:var(--bad);font-size:12.5px}
+  .frame .x{position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:6px;background:rgba(20,20,22,.75);border:0;color:var(--text2);display:none;place-items:center;padding:0;font-size:14px;line-height:1}
+  .frame:hover .x{display:grid}
+  .frame.locked .x{display:none}
+  .meta{padding:8px 10px 9px;display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:baseline}
+  .meta .name{grid-column:1/-1;font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .meta .size{font-weight:600;font-size:14px}
+  .meta .size s{color:var(--text3);font-weight:400;margin-right:6px;text-decoration-color:var(--text3)}
+  .meta .tag{font-size:12px;font-weight:600;border-radius:5px;padding:1px 6px}
+  .tag.save{background:var(--fixed-dim);color:var(--fixed)}
+  .tag.over{background:var(--safelight-dim);color:var(--safelight)}
+  .tag.copy{background:var(--paper2);color:var(--text2)}
+  .tag.q{color:var(--text3);font-weight:500}
+  .meta .dims{grid-column:1/-1;font-size:11.5px;color:var(--text3)}
+  .meta .dims b{font-weight:500;color:var(--text2)}
+  @keyframes flip{0%{transform:translateY(0);opacity:1}40%{transform:translateY(-6px);opacity:0}60%{transform:translateY(6px);opacity:0}100%{transform:translateY(0);opacity:1}}
+  .flip{animation:flip .5s ease}
+
+  /* list view */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{position:sticky;top:0;background:var(--ink);color:var(--text2);font-weight:500;font-size:12px;text-align:left;padding:6px 10px;border-bottom:1px solid var(--rule);z-index:1}
+  tbody td{padding:5px 10px;border-bottom:1px solid var(--rule);white-space:nowrap}
+  tbody tr{cursor:pointer}
+  tbody tr:hover td{background:var(--paper)}
+  td.t{width:54px}
+  td.t img{width:44px;height:44px;object-fit:cover;border-radius:5px;display:block;filter:grayscale(.9) brightness(.55);transition:filter .5s}
+  tr.done td.t img,tr.copied td.t img,tr.over_limit td.t img{filter:none}
+  tr.working td.t img{filter:sepia(.5) brightness(.9)}
+  tr.working td.t{position:relative}
+  tr.working td.t::after{content:"";position:absolute;left:10px;top:5px;width:44px;height:44px;border-radius:5px;box-shadow:inset 0 0 0 2px var(--safelight);animation:pulse 1.1s infinite}
+  td.n{text-align:right}
+  th.n{text-align:right}
+  td.name{max-width:420px;overflow:hidden;text-overflow:ellipsis}
+  .st{display:inline-block;font-size:11.5px;font-weight:600;border-radius:5px;padding:1px 7px}
+  .st.queued{background:var(--paper2);color:var(--text3)}
+  .st.working{background:var(--safelight-dim);color:var(--safelight)}
+  .st.done{background:var(--fixed-dim);color:var(--fixed)}
+  .st.copied,.st.skipped{background:var(--paper2);color:var(--text2)}
+  .st.over_limit{background:var(--safelight-dim);color:var(--safelight)}
+  .st.failed{background:var(--bad-dim);color:var(--bad)}
+  .hidden{display:none !important}
+
+  .empty{height:100%;display:grid;place-items:center;text-align:center;color:var(--text2)}
+  .empty .box{max-width:380px}
+  .empty h3{font-weight:600;color:var(--text);margin:14px 0 6px;font-size:16px}
+  .empty p{margin:0 0 16px;line-height:1.5}
+  .empty svg{width:56px;height:56px;color:var(--text3)}
+
+  /* ---------- foot ---------- */
+  .foot{grid-column:1/-1;position:relative;display:flex;align-items:center;gap:18px;padding:0 18px;border-top:1px solid var(--rule);background:var(--paper);font-size:13px;color:var(--text2)}
+  .foot .prog{position:absolute;left:0;top:-1px;height:2px;width:0;background:var(--safelight);transition:width .25s}
+  .foot .prog.finished{background:var(--fixed)}
+  .foot b{color:var(--text);font-weight:600}
+  .foot .saved{color:var(--fixed);font-weight:600}
+  .foot .k{color:var(--text3);margin-right:4px}
+
+  /* ---------- compare ---------- */
+  .modal{position:fixed;inset:0;background:rgba(10,10,12,.88);display:none;flex-direction:column;z-index:50}
+  .modal.open{display:flex}
+  .mhead{display:flex;align-items:center;gap:14px;padding:12px 18px;color:var(--text2)}
+  .mhead b{color:var(--text)}
+  .mhead .legend{display:flex;gap:16px;margin-left:auto}
+  .mhead .legend span::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--text3)}
+  .mhead .legend span:last-child::before{background:var(--fixed)}
+  .cmp{flex:1;position:relative;margin:0 18px 18px;overflow:hidden;border-radius:10px;background:#000;display:grid;place-items:center;touch-action:none;user-select:none}
+  .cmp img{position:absolute;max-width:100%;max-height:100%;width:auto;height:auto;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none}
+  .cmp .after{clip-path:inset(0 0 0 var(--cut,50%))}
+  .cmp .handle{position:absolute;top:0;bottom:0;left:var(--cut,50%);width:2px;background:var(--text);transform:translateX(-1px);pointer-events:none}
+  .cmp .handle::after{content:"◂ ▸";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--text);color:var(--ink);border-radius:999px;padding:5px 9px;font-size:11px;font-weight:600;letter-spacing:1px;white-space:nowrap}
+  .cmp .lab{position:absolute;bottom:12px;background:rgba(20,20,22,.8);border-radius:6px;padding:4px 9px;font-size:12px;color:var(--text2)}
+  .cmp .lab.l{left:12px}.cmp .lab.r{right:12px;color:var(--fixed)}
+  .cmp .zoom{position:absolute;top:12px;right:12px;display:flex;gap:6px}
+  .toast{position:fixed;bottom:60px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--paper2);border:1px solid var(--rule2);padding:9px 14px;border-radius:8px;opacity:0;transition:.2s;pointer-events:none;z-index:60}
+  .toast.show{opacity:1;transform:translateX(-50%)}
+  @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
+  @media (max-width:860px){:root{--rail:260px}}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <!-- ======================= top ======================= -->
+  <div class="top">
+    <button class="quiet" id="btnRail" title="Show or hide the side panel" aria-label="Toggle side panel">☰</button>
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 5v14M16 5v14M3 10h5M16 10h5M3 14h5M16 14h5"/></svg>
+      Batch Compressor
+    </div>
+    <label class="limit" title="Every output file will be at or under this size">
+      <span>Max size</span>
+      <input type="number" id="max_mb" step="0.5" min="0.05" value="8" aria-label="Max file size in megabytes">
+      <b>MB</b>
+    </label>
+    <div class="seg" role="tablist" aria-label="Mode">
+      <button id="modeAuto" class="on" role="tab">Auto</button>
+      <button id="modeManual" role="tab">Manual</button>
+    </div>
+    <span class="count" id="topCount"></span>
+    <div class="spacer"></div>
+    <button id="btnStartNew" title="Clear photos, results and cached thumbnails">Start new</button>
+    <button id="btnOpen" disabled>Open output folder</button>
+    <button class="stop hidden" id="btnCancel">Stop</button>
+    <button class="go" id="btnStart" disabled>Compress all</button>
+  </div>
+
+  <!-- ======================= rail ======================= -->
+  <aside class="rail" id="rail">
+    <section>
+      <h2>Photos</h2>
+      <div class="row">
+        <button id="btnFolder">Add folder</button>
+        <button id="btnFiles">Add files</button>
+        <button class="quiet" id="btnClear">Clear all</button>
+      </div>
+      <label class="field"><span>Or paste folder / file paths, one per line</span>
+        <textarea id="paths" placeholder="E:\Photos\Trip 2026"></textarea></label>
+      <div class="row" style="margin-top:8px">
+        <button id="btnScan">Add pasted paths</button>
+        <label class="check" style="margin:0"><input type="checkbox" id="recursive" checked>Include subfolders</label>
+      </div>
+      <div class="drop" id="drop">Drop photos here</div>
+    </section>
+
+    <section>
+      <h2>When finished</h2>
+      <label class="check" style="margin-top:0"><input type="checkbox" id="autoOpen">Open the output folder automatically</label>
+    </section>
+
+    <section>
+      <h2>How to compress</h2>
+      <div class="hint" id="autoHint" style="margin-top:0">Auto keeps quality first: JPEG, quality searched from 95 down to 85, full color (4:4:4). Only if that isn’t enough does it shrink the photo in 5% steps, never below 1920 px. Uses every CPU core.</div>
+      <details class="manual" id="manualBox">
+        <summary>Manual settings</summary>
+        <div class="two">
+          <label class="field"><span>Output format</span>
+            <select id="output_format"><option value="jpeg">JPEG</option><option value="webp">WebP</option><option value="keep">Keep original</option></select></label>
+          <label class="field"><span>Aim under limit by</span>
+            <div style="position:relative"><input type="number" id="margin_pct" step="0.5" min="0" max="50"><span style="position:absolute;right:10px;top:7px;color:var(--text3)">%</span></div></label>
+        </div>
+        <div class="two">
+          <label class="field"><span>Quality ceiling</span><input type="number" id="quality_max" min="1" max="100"></label>
+          <label class="field"><span>Quality floor</span><input type="number" id="quality_min" min="1" max="100"></label>
+        </div>
+        <div class="two">
+          <label class="field"><span>Chroma subsampling</span>
+            <select id="subsampling"><option value="4:4:4">4:4:4 (best color)</option><option value="4:2:2">4:2:2</option><option value="4:2:0">4:2:0 (smallest)</option></select></label>
+          <label class="field"><span>Output folder name</span><input type="text" id="output_folder"></label>
+        </div>
+        <label class="check"><input type="checkbox" id="allow_resize">Shrink resolution if quality floor isn’t enough</label>
+        <div class="two">
+          <label class="field"><span>Shrink step</span><input type="number" id="resize_step_pct" min="1" max="50"></label>
+          <label class="field"><span>Smallest long edge (px)</span><input type="number" id="min_long_edge" min="16" step="10"></label>
+        </div>
+        <label class="check"><input type="checkbox" id="progressive">Progressive JPEG</label>
+        <label class="check"><input type="checkbox" id="strip_metadata">Remove metadata (EXIF, GPS)</label>
+        <div class="two">
+          <label class="field"><span>If a file already exists</span>
+            <select id="on_conflict"><option value="suffix">Add a suffix</option><option value="overwrite">Overwrite</option><option value="skip">Skip</option></select></label>
+          <label class="field"><span>Parallel workers (0 = all <span id="cpu"></span>)</span><input type="number" id="workers" min="0"></label>
+        </div>
+        <div class="row" style="margin-top:12px"><button class="quiet" id="btnReset">Reset to Auto defaults</button></div>
+      </details>
+    </section>
+  </aside>
+
+  <!-- ======================= sheet ======================= -->
+  <main class="sheet">
+    <div class="tools">
+      <div class="seg" aria-label="Layout">
+        <button id="viewGrid" class="on" title="Grid">▦ Grid</button>
+        <button id="viewList" title="List">☰ List</button>
+      </div>
+      <label class="sizer" id="sizer">Thumbnail <input type="range" id="thumbSize" min="120" max="420" step="10" value="200"></label>
+      <select id="sort" aria-label="Sort photos">
+        <option value="name">Sort: name</option>
+        <option value="big">Sort: largest first</option>
+        <option value="saved">Sort: most saved</option>
+        <option value="status">Sort: needs attention</option>
+      </select>
+      <div class="selbar" id="selbar">
+        <span><b id="selN">0</b> selected</span>
+        <button id="selAll">Select all</button>
+        <button id="selNone">Clear</button>
+        <button id="selSave">Save to…</button>
+        <button id="selRemove">Remove from batch</button>
+      </div>
+      <div class="spacer"></div>
+      <div class="chips" id="chips">
+        <button class="chip on" data-f="all">All<i id="cAll">0</i></button>
+        <button class="chip" data-f="done">Compressed<i id="cDone">0</i></button>
+        <button class="chip" data-f="over_limit">Over limit<i id="cOver">0</i></button>
+        <button class="chip" data-f="failed">Failed<i id="cFail">0</i></button>
+      </div>
+      <button class="quiet" id="btnNew" title="Clear these photos and results to start fresh">New batch</button>
+    </div>
+    <div class="scroll" id="scroll">
+      <div class="summary" id="summary">
+        <div class="headline"><span id="smSaved">—</span><small id="smSub"></small></div>
+        <div class="ratio">
+          <div class="bars"><div class="before"><i></i></div><div class="after"><i id="smBar"></i></div></div>
+          <span><span id="smBefore"></span><span id="smAfter"></span></span>
+        </div>
+        <div class="acts"><button id="smOpen">Open output folder</button><button id="smNew">New batch</button><button id="smOver" class="quiet hidden">Show over limit</button><button id="smFail" class="quiet hidden">Show failed</button><button id="smHide" class="quiet" aria-label="Hide summary">×</button></div>
+        <div class="facts" style="grid-column:1/-1">
+          <span>Compressed<b id="smDone">0</b></span><span>Kept as is<b id="smCopied">0</b></span><span>Over limit<b id="smOverN" class="warn">0</b></span><span>Failed<b id="smFailN" class="bad">0</b></span><span>Time<b id="smTime">—</b></span><span>Speed<b id="smRate">—</b></span><span>Quality used<b id="smQ">—</b></span><span>Resized<b id="smResized">0</b></span>
+        </div>
+      </div>
+      <div class="empty" id="empty">
+        <div class="box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>
+          <h3>Add the photos you want to post</h3>
+          <p>Pick a folder and set the size limit at the top. Each photo gets the highest quality that fits under it, and the originals stay as they are.</p>
+          <div class="row" style="justify-content:center"><button id="btnFolder2">Add folder</button><button id="btnFiles2">Add files</button></div>
+        </div>
+      </div>
+      <div class="grid" id="grid"></div>
+      <table id="table" class="hidden">
+        <thead><tr><th class="pk"><input type="checkbox" id="selHead" aria-label="Select all"></th><th></th><th>File</th><th class="n">Original</th><th class="n">New</th><th class="n">Saved</th><th class="n">Quality</th><th class="n">Pixels</th><th>Status</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- ======================= foot ======================= -->
+  <div class="foot">
+    <div class="prog" id="prog"></div>
+    <span id="fState">Ready</span>
+    <span><span class="k">Saved</span><span class="saved" id="fSaved">—</span></span>
+    <span><span class="k">Before → after</span><b id="fSize">—</b></span>
+    <span><span class="k">Speed</span><b id="fRate">—</b></span>
+    <span><span class="k">Time</span><b id="fTime">—</b></span>
+    <span class="spacer"></span>
+    <span id="fCounts"></span>
+  </div>
+</div>
+
+<!-- compare modal -->
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-label="Before and after">
+  <div class="mhead">
+    <button class="quiet" id="mClose">← Back</button>
+    <b id="mName"></b><span id="mInfo"></span>
+    <div class="legend"><span>Original</span><span>Compressed</span></div>
+    <button id="mSave" title="Compress this photo into a folder you choose">Save to…</button>
+  </div>
+  <div class="cmp" id="cmp">
+    <img class="before" id="mBefore" alt="Original">
+    <img class="after" id="mAfter" alt="Compressed">
+    <div class="handle"></div>
+    <div class="lab l" id="mLabL"></div><div class="lab r" id="mLabR"></div>
+    <div class="zoom"><button id="mFit">Fit</button><button id="m100">100%</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const MANUAL_KEYS = ["margin_pct","output_format","quality_max","quality_min","subsampling","allow_resize","resize_step_pct","min_long_edge","progressive","strip_metadata","output_folder","on_conflict","workers"];
+let defaults=null, mode="auto", view="grid", filter="all";
+let files=[];                 // {path,name,bytes}
+const items=new Map();        // key -> {f, card, row, res, state}
+let job=null, poll=null;
+
+const MB=1048576;
+const fmtMB=b=>(b/MB).toFixed(b<10*MB?2:1)+" MB";
+const fmtBig=b=>b>=1073741824?(b/1073741824).toFixed(2)+" GB":fmtMB(b);
+const key=p=>p.toLowerCase();
+const thumbUrl=(p,s)=>`/api/thumb?path=${encodeURIComponent(p)}&size=${s}`;
+const toast=m=>{const t=$("toast");t.textContent=m;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),3000);};
+const api=async(url,body,method="POST")=>{
+  const r=await fetch(url,body!==undefined?{method,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{});
+  if(!r.ok) throw new Error((await r.json().catch(()=>({detail:r.statusText}))).detail);
+  return r.json();
+};
+
+/* ---------------- settings ---------------- */
+function setForm(s){ $("max_mb").value=s.max_mb; for(const k of MANUAL_KEYS){const el=$(k); if(el.type==="checkbox") el.checked=!!s[k]; else el.value=s[k];} }
+function readAll(){ const s={max_mb:parseFloat($("max_mb").value)||8}; for(const k of MANUAL_KEYS){const el=$(k); s[k]=el.type==="checkbox"?el.checked:(el.type==="number"?parseFloat(el.value):el.value);} return s; }
+function readSettings(){ return mode==="auto"?{max_mb:parseFloat($("max_mb").value)||8}:readAll(); }
+function setMode(m){ mode=m; $("modeAuto").classList.toggle("on",m==="auto"); $("modeManual").classList.toggle("on",m==="manual"); $("manualBox").open=(m==="manual"); $("manualBox").classList.toggle("hidden",m==="auto"); $("autoHint").classList.toggle("hidden",m==="manual"); if(m==="manual"&&$("app").classList.contains("railless")) toggleRail(true); save("bc.mode",m); }
+const save=(k,v)=>{try{localStorage.setItem(k,typeof v==="string"?v:JSON.stringify(v));}catch{}};
+const load=(k,d)=>{try{const v=localStorage.getItem(k);return v===null?d:(v[0]==="{"||v[0]==="["?JSON.parse(v):v);}catch{return d;}};
+$("modeAuto").onclick=()=>setMode("auto"); $("modeManual").onclick=()=>setMode("manual");
+$("btnReset").onclick=()=>{setForm({...defaults,max_mb:parseFloat($("max_mb").value)||defaults.max_mb});save("bc.settings",readAll());toast("Settings reset");};
+document.querySelectorAll("#manualBox input,#manualBox select,#max_mb").forEach(el=>el.addEventListener("change",()=>save("bc.settings",readAll())));
+function toggleRail(force){ const a=$("app"); const open=force!==undefined?force:a.classList.contains("railless"); a.classList.toggle("railless",!open); save("bc.rail",open?"1":"0"); }
+$("btnRail").onclick=()=>toggleRail();
+
+/* ---------------- view ---------------- */
+function setView(v){ view=v; $("viewGrid").classList.toggle("on",v==="grid"); $("viewList").classList.toggle("on",v==="list"); $("grid").classList.toggle("hidden",v!=="grid"||!files.length); $("table").classList.toggle("hidden",v!=="list"||!files.length); $("sizer").style.visibility=v==="grid"?"":"hidden"; save("bc.view",v); }
+$("viewGrid").onclick=()=>setView("grid"); $("viewList").onclick=()=>setView("list");
+$("thumbSize").oninput=e=>{document.documentElement.style.setProperty("--thumb",e.target.value+"px");save("bc.thumb",e.target.value);};
+$("chips").onclick=e=>{const b=e.target.closest(".chip"); if(!b) return; filter=b.dataset.f; document.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===b)); applyFilter();};
+function applyFilter(){ for(const it of items.values()){ const show=filter==="all"||it.state===filter; it.card.classList.toggle("hidden",!show); it.row.classList.toggle("hidden",!show);} }
+
+/* ---------------- items ---------------- */
+function makeItem(f){
+  const card=document.createElement("div"); card.className="frame loading"; card.tabIndex=0; card.title=f.path;
+  card.innerHTML=`<div class="img"><img loading="lazy" alt=""></div><span class="pick" role="checkbox" aria-checked="false" aria-label="Select"></span><button class="x" aria-label="Remove from batch">×</button>
+    <div class="meta"><div class="name">${f.name}</div><div class="size">${fmtMB(f.bytes)}</div><span class="tag q"></span><div class="dims"></div></div>`;
+  const img=card.querySelector("img"); img.src=thumbUrl(f.path,320); img.onload=()=>card.classList.remove("loading"); img.onerror=()=>{card.classList.remove("loading");img.style.visibility="hidden";};
+  card.querySelector(".x").onclick=e=>{e.stopPropagation();removeItem(f);};
+  card.querySelector(".pick").onclick=e=>{e.stopPropagation();toggleSel(f,e.shiftKey);};
+  card.onclick=e=>{ if(e.ctrlKey||e.metaKey||e.shiftKey||selCount()) toggleSel(f,e.shiftKey); else openCompare(f); };
+  card.onkeydown=e=>{ if(e.key==="Enter")openCompare(f); if(e.key===" "){e.preventDefault();toggleSel(f,e.shiftKey);} };
+  const row=document.createElement("tr"); row.className="queued";
+  row.innerHTML=`<td class="pk"><input type="checkbox" aria-label="Select"></td><td class="t"><img loading="lazy" src="${thumbUrl(f.path,96)}" alt="" onerror="this.style.visibility='hidden'"></td><td class="name" title="${f.path}">${f.name}</td><td class="n">${fmtMB(f.bytes)}</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td><span class="st queued">queued</span></td>`;
+  row.querySelector("input").onclick=e=>{e.stopPropagation();toggleSel(f,e.shiftKey);};
+  row.onclick=e=>{ if(e.ctrlKey||e.metaKey||e.shiftKey) toggleSel(f,e.shiftKey); else openCompare(f); };
+  return {f,card,row,res:null,state:"queued",sel:false};
+}
+
+/* ---------------- selection ---------------- */
+let lastPicked=null;
+const selCount=()=>{let n=0;for(const it of items.values()) if(it.sel) n++; return n;};
+const selected=()=>files.filter(f=>items.get(key(f.path)).sel);
+function setSel(it,on){ it.sel=on; it.card.classList.toggle("sel",on); it.card.querySelector(".pick").setAttribute("aria-checked",on); it.row.classList.toggle("sel",on); it.row.querySelector("input").checked=on; }
+function toggleSel(f,range){
+  const it=items.get(key(f.path)); if(!it) return;
+  if(range&&lastPicked){ const a=files.findIndex(x=>key(x.path)===lastPicked), b=files.findIndex(x=>key(x.path)===key(f.path)); const [lo,hi]=a<b?[a,b]:[b,a]; for(let i=lo;i<=hi;i++) setSel(items.get(key(files[i].path)),true); }
+  else setSel(it,!it.sel);
+  lastPicked=key(f.path); updateSelbar();
+}
+function selectAll(on){ for(const it of items.values()) if(!it.card.classList.contains("hidden")||!on) setSel(it,on); updateSelbar(); }
+function updateSelbar(){
+  const n=selCount();
+  $("selbar").classList.toggle("on",n>0); $("selN").textContent=n; $("app").classList.toggle("selecting",n>0);
+  $("selHead").checked=n>0&&n===files.length; $("selHead").indeterminate=n>0&&n<files.length;
+  const running=job&&job.state==="running";
+  $("btnStart").textContent=n?`Compress ${n} selected`:"Compress all"; $("btnStart").disabled=!files.length||running;
+}
+$("selAll").onclick=()=>selectAll(true); $("selNone").onclick=()=>selectAll(false);
+$("selHead").onclick=e=>selectAll(e.target.checked);
+$("selRemove").onclick=()=>{ if(job&&job.state==="running") return toast("Stop the batch first"); const n=selCount(); for(const f of selected()) removeItem(f); updateSelbar(); toast(`Removed ${n} photo${n>1?"s":""}`); };
+document.addEventListener("keydown",e=>{ if((e.ctrlKey||e.metaKey)&&e.key==="a"&&!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)&&files.length){ e.preventDefault(); selectAll(true); } });
+
+/* ---------------- sorting ---------------- */
+function sortItems(){
+  const how=$("sort").value; save("bc.sort",how);
+  const rank={failed:0,over_limit:1,working:2,queued:3,done:4,copied:5,skipped:6};
+  const cmpf={
+    name:(a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}),
+    big:(a,b)=>b.bytes-a.bytes,
+    saved:(a,b)=>{const ra=items.get(key(a.path)).res,rb=items.get(key(b.path)).res; const sa=ra?ra.original_bytes-ra.new_bytes:-1, sb=rb?rb.original_bytes-rb.new_bytes:-1; return sb-sa;},
+    status:(a,b)=>rank[items.get(key(a.path)).state]-rank[items.get(key(b.path)).state]||b.bytes-a.bytes,
+  }[how]||((a,b)=>0);
+  files.sort(cmpf);
+  const g=$("grid"), t=$("tbody");
+  for(const f of files){ const it=items.get(key(f.path)); g.appendChild(it.card); t.appendChild(it.row); }
+}
+$("sort").onchange=sortItems;
+function removeItem(f){ if(job&&job.state==="running") return; const k=key(f.path); const it=items.get(k); if(!it) return; it.card.remove(); it.row.remove(); items.delete(k); files=files.filter(x=>key(x.path)!==k); refreshCounts(); updateSelbar(); }
+function refreshCounts(){
+  const n=files.length, tot=files.reduce((a,f)=>a+f.bytes,0);
+  $("topCount").textContent=n?`${n} photos, ${fmtBig(tot)}`:""; $("cAll").textContent=n;
+  $("empty").classList.toggle("hidden",!!n); $("btnStart").disabled=!n||(job&&job.state==="running"); setView(view);
+  let d=0,o=0,fl=0; for(const it of items.values()){ if(it.state==="done")d++; else if(it.state==="over_limit")o++; else if(it.state==="failed")fl++; }
+  $("cDone").textContent=d; $("cOver").textContent=o; $("cFail").textContent=fl;
+}
+async function addPaths(paths){
+  paths=paths.map(s=>s.trim()).filter(Boolean); if(!paths.length) return;
+  const r=await api("/api/scan",{paths,recursive:$("recursive").checked});
+  let added=0; const gfrag=document.createDocumentFragment(), tfrag=document.createDocumentFragment();
+  for(const f of r.files){ const k=key(f.path); if(items.has(k)) continue; const it=makeItem(f); items.set(k,it); files.push(f); gfrag.appendChild(it.card); tfrag.appendChild(it.row); added++; }
+  $("grid").appendChild(gfrag); $("tbody").appendChild(tfrag);
+  if($("sort").value!=="name") sortItems();
+  refreshCounts(); updateSelbar(); toast(added?`Added ${added} photo${added>1?"s":""}`:"No new photos found there");
+}
+const pick=async kind=>{const r=await api("/api/browse",{kind}); if(r.error) return toast(r.error); addPaths(r.paths);};
+$("btnFolder").onclick=$("btnFolder2").onclick=()=>pick("folder");
+$("btnFiles").onclick=$("btnFiles2").onclick=()=>pick("files");
+$("btnScan").onclick=()=>addPaths($("paths").value.split(/\r?\n/));
+$("btnClear").onclick=()=>{ if(job&&job.state==="running") return toast("Stop the batch first"); detach(); items.clear(); files=[]; lastPicked=null; $("grid").innerHTML=""; $("tbody").innerHTML=""; $("paths").value=""; try{localStorage.removeItem("bc.job");}catch{} if(location.hash) history.replaceState(null,"",location.pathname); resetFoot(); $("summary").classList.remove("on"); $("fState").textContent="Ready"; refreshCounts(); updateSelbar(); };
+const drop=$("drop");
+drop.addEventListener("dragover",e=>{e.preventDefault();drop.classList.add("over");});
+drop.addEventListener("dragleave",()=>drop.classList.remove("over"));
+drop.addEventListener("drop",e=>{ e.preventDefault(); drop.classList.remove("over"); const p=[...e.dataTransfer.files].map(f=>f.path).filter(Boolean); const t=e.dataTransfer.getData("text"); if(t) p.push(...t.split(/\r?\n/)); if(p.length) addPaths(p); else toast("This browser hides file paths. Use Add files, or paste the paths."); });
+
+/* ---------------- run ---------------- */
+function resetFoot(){ $("prog").style.width="0"; $("prog").classList.remove("finished"); $("fState").textContent="Ready"; $("fSaved").textContent="—"; $("fSize").textContent="—"; $("fRate").textContent="—"; $("fTime").textContent="—"; $("fCounts").textContent=""; $("btnOpen").disabled=true; }
+function setState(it,state){
+  it.state=state;
+  it.card.classList.remove("working","done","copied","over_limit","failed","skipped"); it.card.classList.toggle("locked",state!=="queued");
+  if(state!=="queued") it.card.classList.add(state);
+  it.row.className=state;
+  const st=it.row.querySelector(".st"); st.className="st "+state; st.textContent={queued:"queued",working:"compressing",done:"compressed",copied:"already small",over_limit:"over limit",failed:"failed",skipped:"skipped"}[state];
+}
+$("btnStart").onclick=async()=>{
+  const s=readSettings(); if(!(s.max_mb>0)) return toast("Enter a size limit first");
+  const chosen=selCount()?selected():files;
+  const order=chosen.map(f=>f.path), inJob=new Set(order.map(key));
+  resetFoot(); $("summary").classList.remove("on");
+  for(const it of items.values()){ const inc=inJob.has(key(it.f.path)); it.card.classList.toggle("dim",!inc); it.row.style.opacity=inc?"":".45"; if(inc){ setState(it,"queued"); it.res=null; } }
+  const r=await api("/api/jobs",{files:order,settings:s});
+  save("bc.job",{id:r.job_id,order,all:files.map(f=>f.path)});
+  attach(r.job_id,order);
+};
+function showSummary(s){
+  const rs=[...items.values()].filter(it=>it.res).map(it=>it.res);
+  const saved=s.original_bytes-s.new_bytes, pct=s.original_bytes?Math.round(saved/s.original_bytes*100):0;
+  $("smSaved").textContent=s.original_bytes?`${fmtBig(saved)} saved`:"Nothing to compress";
+  $("smSub").textContent=s.original_bytes?`${pct}% smaller across ${s.done} photo${s.done!==1?"s":""}${s.state==="cancelled"?" (stopped early)":""}`:"";
+  $("smBar").style.setProperty("--w",(s.original_bytes?s.new_bytes/s.original_bytes*100:0)+"%");
+  $("smBefore").textContent="Before "+fmtBig(s.original_bytes); $("smAfter").textContent="After "+fmtBig(s.new_bytes);
+  $("smDone").textContent=s.counts.compressed; $("smCopied").textContent=s.counts.copied+s.counts.skipped; $("smOverN").textContent=s.counts.over_limit; $("smFailN").textContent=s.counts.failed;
+  $("smTime").textContent=s.elapsed.toFixed(1)+" s"; $("smRate").textContent=s.elapsed?(s.done/s.elapsed).toFixed(1)+" photos/s":"—";
+  const qs=rs.filter(r=>r.quality).map(r=>r.quality); $("smQ").textContent=qs.length?(Math.min(...qs)===Math.max(...qs)?`${qs[0]}`:`${Math.min(...qs)}–${Math.max(...qs)}`):"—";
+  $("smResized").textContent=rs.filter(r=>r.status!=="failed"&&(r.width!==r.orig_width||r.height!==r.orig_height)).length;
+  $("smOver").classList.toggle("hidden",!s.counts.over_limit); $("smFail").classList.toggle("hidden",!s.counts.failed);
+  $("summary").classList.add("on"); $("scroll").scrollTop=0;
+}
+const pickChip=f=>document.querySelector(`.chip[data-f="${f}"]`).click();
+$("smOver").onclick=()=>pickChip("over_limit"); $("smFail").onclick=()=>pickChip("failed"); $("smHide").onclick=()=>$("summary").classList.remove("on");
+$("smOpen").onclick=()=>$("btnOpen").click();
+async function startNew(){
+  if(job&&job.state==="running") return toast("Stop the batch first");
+  $("btnClear").click();
+  filter="all"; document.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c.dataset.f==="all"));
+  $("sort").value="name"; save("bc.sort","name");
+  try{ for(const k of ["bc.job"]) localStorage.removeItem(k); }catch{}
+  let n=0; try{ n=(await api("/api/reset",{})).thumbnails_cleared; }catch{}
+  toast(n?`Fresh start. Cleared ${n} cached thumbnail${n>1?"s":""}.`:"Fresh start.");
+}
+$("btnStartNew").onclick=$("smNew").onclick=$("btnNew").onclick=startNew;
+function attach(id,order,reattached=false){
+  job={id,state:"running",seen:0,order,workers:1,reattached};
+  $("btnStart").disabled=true; $("btnCancel").classList.remove("hidden"); $("btnFolder").disabled=$("btnFiles").disabled=$("btnScan").disabled=true;
+  $("fState").textContent="Compressing";
+  clearInterval(poll); poll=setInterval(tick,350); tick();
+}
+function detach(){ clearInterval(poll); job=null; $("btnCancel").classList.add("hidden"); $("btnStart").disabled=!files.length; $("btnFolder").disabled=$("btnFiles").disabled=$("btnScan").disabled=false; }
+$("btnCancel").onclick=async()=>{ if(job) await api(`/api/jobs/${job.id}/cancel`,{}); $("fState").textContent="Stopping after the current photos"; };
+async function openOutput(){
+  const it=[...items.values()].find(i=>i.res&&i.res.destination);
+  if(!it) return toast("Nothing has been saved yet");
+  try{ const r=await api("/api/open",{path:it.res.destination}); toast("Opened "+r.folder); }catch(e){ toast("Couldn’t open the folder: "+e.message); }
+}
+$("btnOpen").onclick=openOutput;
+
+/* ---------------- save to a folder of your choice ---------------- */
+async function saveTo(list){
+  if(!list.length) return toast("Select some photos first");
+  if(job&&job.state==="running") return toast("Wait for the current batch to finish");
+  const r=await api("/api/browse",{kind:"folder"}); if(r.error) return toast(r.error);
+  const folder=r.paths[0]; if(!folder) return;
+  const s={...readSettings(),output_folder:folder};
+  const order=list.map(f=>f.path), inJob=new Set(order.map(key));
+  resetFoot(); $("summary").classList.remove("on"); $("modal").classList.remove("open");
+  for(const it of items.values()){ const inc=inJob.has(key(it.f.path)); it.card.classList.toggle("dim",!inc); it.row.style.opacity=inc?"":".45"; if(inc){ setState(it,"queued"); it.res=null; } }
+  const j=await api("/api/jobs",{files:order,settings:s});
+  save("bc.job",{id:j.job_id,order,all:files.map(f=>f.path)});
+  attach(j.job_id,order); toast(`Saving ${order.length} photo${order.length>1?"s":""} to ${folder}`);
+}
+$("selSave").onclick=()=>saveTo(selected());
+$("mSave").onclick=()=>{ const f=files.find(x=>x.name===$("mName").textContent&&(!$("mName").dataset.path||x.path===$("mName").dataset.path)); if(f) saveTo([f]); };
+
+function paintResult(it,r){
+  it.res=r;
+  const state=r.status==="compressed"?"done":r.status;
+  setState(it,state);
+  const c=it.card, m=c.querySelector(".meta"), size=m.querySelector(".size"), tag=m.querySelector(".tag"), dims=m.querySelector(".dims");
+  const td=it.row.children;
+  if(state==="failed"){ tag.textContent=""; dims.textContent=r.error||"Couldn’t read this file"; c.title=r.error||""; td[8].querySelector(".st").title=r.error||""; return; }
+  if(state==="skipped"){ dims.textContent="Output already exists"; return; }
+  const pct=r.original_bytes?Math.round((1-r.new_bytes/r.original_bytes)*100):0;
+  size.innerHTML=`<s>${fmtMB(r.original_bytes)}</s>${fmtMB(r.new_bytes)}`; size.classList.add("flip");
+  if(state==="copied"){ tag.className="tag copy"; tag.textContent="kept"; }
+  else if(state==="over_limit"){ tag.className="tag over"; tag.textContent="over limit"; }
+  else { tag.className="tag save"; tag.textContent=`−${pct}%`; }
+  const resized=r.width!==r.orig_width||r.height!==r.orig_height;
+  dims.innerHTML=(r.quality?`q <b>${r.quality}</b> · `:"")+(resized?`${r.orig_width}×${r.orig_height} → <b>${r.width}×${r.height}</b>`:`<b>${r.width}×${r.height}</b>`);
+  td[4].textContent=fmtMB(r.new_bytes); td[5].textContent=pct>0?`−${pct}%`:`${pct}%`; td[5].style.color=pct>0?"var(--fixed)":""; td[6].textContent=r.quality??"—"; td[7].textContent=resized?`${r.width}×${r.height} ↓`:`${r.width}×${r.height}`;
+}
+async function tick(){
+  if(!job) return;
+  let s; try{ s=await api(`/api/jobs/${job.id}?since=${job.seen}`);}catch(e){ if(/not found/i.test(e.message)){ detach(); try{localStorage.removeItem("bc.job");}catch{} $("fState").textContent="Ready"; } return; }
+  job.workers=s.workers||job.workers;
+  for(const r of s.results){ job.seen++; const it=items.get(key(r.source)); if(it) paintResult(it,r); }
+  // frames currently in the pool: the next <workers> queued after the last finished one
+  if(s.state==="running"){ let n=0; for(let i=s.done;i<job.order.length&&n<job.workers;i++,n++){ const it=items.get(key(job.order[i])); if(it&&it.state==="queued") setState(it,"working"); } }
+  $("prog").style.width=(s.total?s.done/s.total*100:0)+"%";
+  $("fTime").textContent=s.elapsed.toFixed(1)+" s";
+  if(s.done){ $("fRate").textContent=(s.done/s.elapsed).toFixed(1)+" photos/s"; }
+  if(s.original_bytes){ $("fSaved").textContent=fmtBig(s.original_bytes-s.new_bytes)+` (${Math.round((1-s.new_bytes/s.original_bytes)*100)}%)`; $("fSize").textContent=`${fmtBig(s.original_bytes)} → ${fmtBig(s.new_bytes)}`; }
+  $("fCounts").textContent=`${s.done} of ${s.total}`+(s.counts.over_limit?` · ${s.counts.over_limit} over limit`:"")+(s.counts.failed?` · ${s.counts.failed} failed`:"");
+  refreshCounts(); if(filter!=="all") applyFilter();
+  if(s.state!=="running"){
+    clearInterval(poll); job.state=s.state;
+    for(const it of items.values()) if(it.state==="working") setState(it,"queued");
+    $("btnCancel").classList.add("hidden"); $("btnStart").disabled=false; $("btnOpen").disabled=false; $("btnFolder").disabled=$("btnFiles").disabled=$("btnScan").disabled=false;
+    $("prog").classList.add("finished"); $("fState").textContent=s.state==="cancelled"?"Stopped":"Done";
+    for(const it of items.values()){ it.card.classList.remove("dim"); it.row.style.opacity=""; }
+    updateSelbar(); showSummary(s); if($("sort").value==="status"||$("sort").value==="saved") sortItems();
+    if($("autoOpen").checked&&s.state==="finished"&&!job.reattached) openOutput();
+  }
+}
+
+/* ---------------- compare ---------------- */
+const cmp=$("cmp"); let cut=50, zoom="fit";
+function openCompare(f){
+  const it=items.get(key(f.path)); const r=it&&it.res;
+  $("mName").textContent=f.name; $("mName").dataset.path=f.path;
+  const before=$("mBefore"), after=$("mAfter");
+  before.src=thumbUrl(f.path,1800);
+  if(r&&r.destination&&r.status!=="failed"){
+    after.src=thumbUrl(r.destination,1800); after.style.display="";
+    cmp.style.setProperty("--cut","50%"); cut=50; cmp.querySelector(".handle").style.display="";
+    $("mInfo").textContent=` ${fmtMB(r.original_bytes)} → ${fmtMB(r.new_bytes)}`+(r.quality?`, quality ${r.quality}`:"")+`, ${r.width}×${r.height}`;
+    $("mLabL").textContent="Original "+fmtMB(r.original_bytes); $("mLabR").textContent="Compressed "+fmtMB(r.new_bytes);
+  } else {
+    after.removeAttribute("src"); after.style.display="none"; cmp.querySelector(".handle").style.display="none";
+    $("mInfo").textContent=` ${fmtMB(f.bytes)}, not compressed yet`; $("mLabL").textContent="Original"; $("mLabR").textContent="";
+  }
+  setZoom("fit"); $("modal").classList.add("open"); $("mClose").focus();
+}
+function setZoom(z){ zoom=z; for(const im of [$("mBefore"),$("mAfter")]){ if(z==="fit"){im.style.maxWidth="100%";im.style.maxHeight="100%";} else {im.style.maxWidth="none";im.style.maxHeight="none";} } $("mFit").classList.toggle("on",z==="fit"); $("m100").classList.toggle("on",z==="100"); }
+$("mFit").onclick=()=>setZoom("fit"); $("m100").onclick=()=>setZoom("100");
+$("mClose").onclick=()=>$("modal").classList.remove("open");
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") $("modal").classList.remove("open"); if(e.key==="Enter"&&!$("modal").classList.contains("open")&&document.activeElement.tagName!=="TEXTAREA"&&!$("btnStart").disabled&&document.activeElement.tagName!=="BUTTON") $("btnStart").click(); });
+const move=e=>{ const b=cmp.getBoundingClientRect(); cut=Math.max(0,Math.min(100,(e.clientX-b.left)/b.width*100)); cmp.style.setProperty("--cut",cut+"%"); };
+cmp.addEventListener("pointerdown",e=>{cmp.setPointerCapture(e.pointerId);move(e);});
+cmp.addEventListener("pointermove",e=>{if(e.buttons)move(e);});
+
+/* ---------------- init ---------------- */
+(async()=>{
+  const d=await api("/api/defaults"); defaults=d.settings; $("cpu").textContent=d.cpu_count;
+  setForm({...defaults,...(load("bc.settings",{})||{})});
+  setMode(load("bc.mode","auto")); setView(load("bc.view","grid"));
+  const ts=load("bc.thumb","200"); $("thumbSize").value=ts; document.documentElement.style.setProperty("--thumb",ts+"px");
+  if(load("bc.rail","1")==="0") toggleRail(false);
+  refreshCounts();
+  // Deep link: /#add=E:\Photos\Trip  (handy for bookmarks and scripts)
+  const h=new URLSearchParams(location.hash.slice(1));
+  if(h.get("view")) setView(h.get("view"));
+  if(h.get("add")){
+    await addPaths(h.get("add").split("|"));
+    if(h.get("job")) attach(h.get("job"),files.map(f=>f.path),true);
+    else if(h.get("go")==="1"&&!$("btnStart").disabled) $("btnStart").click();
+  } else {
+    // Refreshed mid-batch or came back later: re-add the photos and show the job as it stands.
+    const prev=load("bc.job",null);
+    if(prev&&prev.id&&prev.order&&prev.order.length){ await addPaths(prev.all||prev.order); attach(prev.id,prev.order,true); }
+  }
+  $("sort").value=load("bc.sort","name");
+  $("autoOpen").checked=load("bc.autoOpen","0")==="1"; $("autoOpen").onchange=e=>save("bc.autoOpen",e.target.checked?"1":"0");
+})();
+</script>
+</body>
+</html>
