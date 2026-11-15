@@ -9,7 +9,19 @@ import server
 
 @pytest.fixture
 def client():
-    return TestClient(server.app)
+    return TestClient(server.app, base_url="http://127.0.0.1:8765")
+
+
+def test_rejects_foreign_host():
+    c = TestClient(server.app, base_url="http://evil.example")
+    assert c.get("/api/defaults").status_code == 403
+
+
+def test_rejects_cross_site(client, images):
+    for site in ("cross-site", "same-site"):
+        r = client.get("/api/file", params={"path": images[0]}, headers={"Sec-Fetch-Site": site})
+        assert r.status_code == 403
+    assert client.get("/api/file", params={"path": images[0]}, headers={"Sec-Fetch-Site": "same-origin"}).status_code == 200
 
 
 @pytest.fixture

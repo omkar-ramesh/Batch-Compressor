@@ -20,6 +20,38 @@ def resource_path(rel: str) -> Path:
     return base / rel
 
 
+def data_dir() -> Path:
+    """Per-user folder for the WebView profile (localStorage: settings, presets, view)."""
+    import os
+    base = Path(os.environ.get("APPDATA") or Path.home())
+    d = base / "BatchCompressor"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+class Api:
+    """Exposed to the page as window.pywebview.api."""
+
+    def flash(self) -> bool:
+        """Flash the taskbar button until the window is focused (Windows only)."""
+        if not sys.platform.startswith("win"):
+            return False
+        import ctypes
+        from ctypes import wintypes
+
+        class FLASHWINFO(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.UINT), ("hwnd", wintypes.HWND), ("dwFlags", wintypes.DWORD),
+                        ("uCount", wintypes.UINT), ("dwTimeout", wintypes.DWORD)]
+
+        user32 = ctypes.windll.user32
+        hwnd = user32.FindWindowW(None, "Batch Compressor")
+        if not hwnd or user32.GetForegroundWindow() == hwnd:
+            return False
+        FLASHW_ALL, FLASHW_TIMERNOFG = 0x3, 0xC
+        info = FLASHWINFO(ctypes.sizeof(FLASHWINFO), hwnd, FLASHW_ALL | FLASHW_TIMERNOFG, 0, 0)
+        return bool(user32.FlashWindowEx(ctypes.byref(info)))
+
+
 def free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
@@ -55,7 +87,7 @@ def main() -> None:
     window = webview.create_window(
         "Batch Compressor", url,
         width=1440, height=900, min_size=(960, 640),
-        background_color="#141416",
+        background_color="#141416", js_api=Api(),
     )
 
     # Native pickers through the window instead of a stray tkinter dialog.
@@ -75,7 +107,8 @@ def main() -> None:
         http.should_exit = True
 
     window.events.closed += on_closed
-    webview.start(debug="--debug" in sys.argv)
+    # pywebview defaults to a private (throwaway) profile, which wiped saved settings on every launch.
+    webview.start(debug="--debug" in sys.argv, private_mode=False, storage_path=str(data_dir() / "webview"))
     http.should_exit = True
 
 

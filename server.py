@@ -28,6 +28,24 @@ HOST, PORT = "127.0.0.1", 8765
 app = FastAPI(title="Batch Compressor")
 runner = BatchRunner()
 
+_ALLOWED_HOSTS = {"127.0.0.1", "localhost"}
+
+
+@app.middleware("http")
+async def local_only(request, call_next):
+    """This server reads local files on request, so only our own page may talk to it.
+    - Host check blocks DNS rebinding (evil.com resolving to 127.0.0.1).
+    - Sec-Fetch-Site blocks other sites embedding e.g. <img src=".../api/file?path=\\\\host\\share\\x.jpg">,
+      which would make Windows send NTLM credentials to that host. Browsers set it on every request;
+      'none' = typed URL / bookmark, absent = non-browser client.
+    """
+    host = (request.headers.get("host") or "").rsplit(":", 1)[0].strip("[]").lower()
+    if host not in _ALLOWED_HOSTS:
+        return JSONResponse({"detail": "forbidden host"}, status_code=403)
+    if request.headers.get("sec-fetch-site", "same-origin") not in ("same-origin", "none"):
+        return JSONResponse({"detail": "cross-site request refused"}, status_code=403)
+    return await call_next(request)
+
 # The desktop app (app.py) replaces this with a native WebView2 dialog; the browser
 # version falls back to tkinter.
 picker = None

@@ -23,9 +23,12 @@ pip install -r requirements.txt
 While it runs, each frame shows an amber "safelight" sweep as it's being worked on, then snaps into full color with its new size. Afterwards:
 
 - A summary at the top: total saved, before/after bar, counts, quality range used, how many were resized.
-- **Grid / List** toggle, thumbnail size slider, sort (name, largest, most saved, needs attention) and filters for *Compressed*, *Over limit*, *Failed*.
+- **Quality score** on every compressed photo: a *match* value (SSIM vs. the original, 1.000 = identical) shown on each card, in the list and as *Lowest match* in the summary. Photos below 0.93 land in the *Check quality* filter.
+- **Grid / List** toggle, thumbnail size slider, sort (name, largest, most saved, needs attention, lowest match; click list column headers to sort) and filters for *Compressed*, *Over limit*, *Check quality*, *Failed*.
+- **Presets** in the side panel: built-ins for email, web gallery (WebP) and archive, plus your own (*Save* the current settings under a name).
+- When a batch finishes in the background, the taskbar button flashes (desktop app) or a notification appears (browser).
 - **Select photos** (hover a frame for the checkbox, Shift-click for a range, Ctrl+A for all) to compress just those, **Save to…** a folder of your choice, or remove them from the batch.
-- **Click any photo** for a before/after slider (drag to compare, *100%* for pixel-level); *Save to…* there saves that one photo wherever you like.
+- **Click any photo** for a before/after slider on the real files (drag to compare, *100%* for pixel-level). *Preview with current settings* compresses that one photo in memory so you can judge settings before running the batch; nothing is saved. *Save to…* there saves that one photo wherever you like.
 - **New batch** clears the photos and results so the next set starts clean.
 - *Open the output folder automatically* (side panel) opens Explorer when a batch finishes.
 - Refreshing the page mid-batch reattaches to the running job; nothing is lost.

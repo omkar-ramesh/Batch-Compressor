@@ -156,6 +156,10 @@
 
   /* list view */
   table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th[data-sort]{cursor:pointer;user-select:none}
+  thead th[data-sort]:hover{color:var(--text)}
+  thead th.sorted{color:var(--text)}
+  thead th.sorted::after{content:" ↓";color:var(--safelight)}
   thead th{position:sticky;top:0;background:var(--ink);color:var(--text2);font-weight:500;font-size:12px;text-align:left;padding:6px 10px;border-bottom:1px solid var(--rule);z-index:1}
   tbody td{padding:5px 10px;border-bottom:1px solid var(--rule);white-space:nowrap}
   tbody tr{cursor:pointer}
@@ -265,7 +269,14 @@
 
     <section>
       <h2>How to compress</h2>
-      <div class="hint" id="autoHint" style="margin-top:0">Auto keeps quality first: JPEG, quality searched from 95 down to 85, full color (4:4:4). Only if that isn’t enough does it shrink the photo in 5% steps, never below 1920 px. Uses every CPU core.</div>
+      <label class="field" style="margin-top:0"><span>Preset</span>
+        <select id="preset" aria-label="Load a preset"></select></label>
+      <div class="row" style="margin-top:8px;flex-wrap:nowrap">
+        <input type="text" id="presetName" placeholder="Name for current settings" aria-label="Preset name" style="flex:1;min-width:0">
+        <button id="presetSave">Save</button>
+        <button class="quiet" id="presetDel" title="Delete the selected preset" disabled>Delete</button>
+      </div>
+      <div class="hint" id="autoHint">Auto keeps quality first: JPEG, quality searched from 95 down to 85, full color (4:4:4). Only if that isn’t enough does it shrink the photo in 5% steps, never below 1920 px. Uses every CPU core.</div>
       <details class="manual" id="manualBox">
         <summary>Manual settings</summary>
         <div class="two">
@@ -313,6 +324,7 @@
         <option value="big">Sort: largest first</option>
         <option value="saved">Sort: most saved</option>
         <option value="status">Sort: needs attention</option>
+        <option value="match">Sort: lowest match first</option>
       </select>
       <div class="selbar" id="selbar">
         <span><b id="selN">0</b> selected</span>
@@ -353,7 +365,7 @@
       </div>
       <div class="grid" id="grid"></div>
       <table id="table" class="hidden">
-        <thead><tr><th class="pk"><input type="checkbox" id="selHead" aria-label="Select all"></th><th></th><th>File</th><th class="n">Original</th><th class="n">New</th><th class="n">Saved</th><th class="n">Quality</th><th class="n" title="SSIM vs. the original, 1.000 = identical">Match</th><th class="n">Pixels</th><th>Status</th></tr></thead>
+        <thead><tr><th class="pk"><input type="checkbox" id="selHead" aria-label="Select all"></th><th></th><th data-sort="name">File</th><th class="n" data-sort="big">Original</th><th class="n">New</th><th class="n" data-sort="saved">Saved</th><th class="n">Quality</th><th class="n" data-sort="match" title="SSIM vs. the original, 1.000 = identical">Match</th><th class="n">Pixels</th><th data-sort="status">Status</th></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>
@@ -430,7 +442,53 @@ const save=(k,v)=>{try{localStorage.setItem(k,typeof v==="string"?v:JSON.stringi
 const load=(k,d)=>{try{const v=localStorage.getItem(k);return v===null?d:(v[0]==="{"||v[0]==="["?JSON.parse(v):v);}catch{return d;}};
 $("modeAuto").onclick=()=>setMode("auto"); $("modeManual").onclick=()=>setMode("manual");
 $("btnReset").onclick=()=>{setForm({...defaults,max_mb:parseFloat($("max_mb").value)||defaults.max_mb});save("bc.settings",readAll());toast("Settings reset");};
-document.querySelectorAll("#manualBox input,#manualBox select,#max_mb").forEach(el=>el.addEventListener("change",()=>save("bc.settings",readAll())));
+document.querySelectorAll("#manualBox input,#manualBox select,#max_mb").forEach(el=>el.addEventListener("change",()=>{ save("bc.settings",readAll()); $("preset").value=""; $("presetDel").disabled=true; }));
+
+/* ---------------- presets ---------------- */
+// Built-ins only list what differs from Auto; everything else comes from the defaults.
+const BUILTIN_PRESETS=[
+  {name:"Email / chat · 8 MB", mode:"auto", s:{max_mb:8}},
+  {name:"Web gallery · 2 MB WebP", mode:"manual", s:{max_mb:2,output_format:"webp",quality_min:80}},
+  {name:"Archive · near-lossless 15 MB", mode:"manual", s:{max_mb:15,quality_min:92,allow_resize:false}},
+];
+const userPresets=()=>{ const p=load("bc.presets",[]); return Array.isArray(p)?p:[]; };
+const escHtml=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function renderPresets(selected=""){
+  const opt=(id,p)=>`<option value="${id}">${escHtml(p.name)}</option>`;
+  const mine=userPresets();
+  $("preset").innerHTML=`<option value="">Choose a preset…</option><optgroup label="Built-in">${BUILTIN_PRESETS.map((p,i)=>opt("b"+i,p)).join("")}</optgroup>`+
+    (mine.length?`<optgroup label="Yours">${mine.map((p,i)=>opt("u"+i,p)).join("")}</optgroup>`:"");
+  $("preset").value=selected; $("presetDel").disabled=!selected.startsWith("u");
+}
+const presetById=id=>id[0]==="b"?BUILTIN_PRESETS[+id.slice(1)]:userPresets()[+id.slice(1)];
+$("preset").onchange=e=>{
+  const id=e.target.value; $("presetDel").disabled=!id.startsWith("u"); if(!id) return;
+  const p=presetById(id); if(!p) return;
+  setForm({...defaults,...p.s}); setMode(p.mode||"manual"); save("bc.settings",readAll());
+  $("preset").value=id; toast(`Loaded “${p.name}”`);
+};
+$("presetSave").onclick=()=>{
+  const name=$("presetName").value.trim(); if(!name) return toast("Type a name for the preset first");
+  const mine=userPresets().filter(p=>p.name.toLowerCase()!==name.toLowerCase());
+  mine.push({name,mode,s:readAll()}); mine.sort((a,b)=>a.name.localeCompare(b.name));
+  save("bc.presets",mine); $("presetName").value="";
+  renderPresets("u"+mine.findIndex(p=>p.name===name)); toast(`Saved “${name}”`);
+};
+$("presetName").onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); e.stopPropagation(); $("presetSave").click(); } };
+$("presetDel").onclick=()=>{
+  const id=$("preset").value; if(!id.startsWith("u")) return;
+  const mine=userPresets(), [gone]=mine.splice(+id.slice(1),1);
+  save("bc.presets",mine); renderPresets(); if(gone) toast(`Deleted “${gone.name}”`);
+};
+
+/* ---------------- finish alert ---------------- */
+// Desktop app: flash the taskbar button. Browser: a system notification if the tab is in the background.
+function alertDone(s){
+  const body=`${s.done} photo${s.done!==1?"s":""} done`+(s.counts.over_limit?`, ${s.counts.over_limit} over limit`:"")+(s.counts.failed?`, ${s.counts.failed} failed`:"");
+  if(window.pywebview&&window.pywebview.api&&window.pywebview.api.flash){ window.pywebview.api.flash().catch(()=>{}); return; }
+  if(document.hidden&&"Notification" in window&&Notification.permission==="granted"){ try{ new Notification("Batch Compressor",{body}); }catch{} }
+}
+function askNotify(){ if(!window.pywebview&&"Notification" in window&&Notification.permission==="default"){ try{ Notification.requestPermission(); }catch{} } }
 function toggleRail(force){ const a=$("app"); const open=force!==undefined?force:a.classList.contains("railless"); a.classList.toggle("railless",!open); save("bc.rail",open?"1":"0"); }
 $("btnRail").onclick=()=>toggleRail();
 
@@ -491,12 +549,15 @@ function sortItems(){
     big:(a,b)=>b.bytes-a.bytes,
     saved:(a,b)=>{const ra=items.get(key(a.path)).res,rb=items.get(key(b.path)).res; const sa=ra?ra.original_bytes-ra.new_bytes:-1, sb=rb?rb.original_bytes-rb.new_bytes:-1; return sb-sa;},
     status:(a,b)=>rank[items.get(key(a.path)).state]-rank[items.get(key(b.path)).state]||b.bytes-a.bytes,
+    match:(a,b)=>{const sa=items.get(key(a.path)).res?.ssim, sb=items.get(key(b.path)).res?.ssim; return (sa??2)-(sb??2);},  // unscored last
   }[how]||((a,b)=>0);
+  document.querySelectorAll("thead th[data-sort]").forEach(th=>th.classList.toggle("sorted",th.dataset.sort===how));
   files.sort(cmpf);
   const g=$("grid"), t=$("tbody");
   for(const f of files){ const it=items.get(key(f.path)); g.appendChild(it.card); t.appendChild(it.row); }
 }
 $("sort").onchange=sortItems;
+document.querySelectorAll("thead th[data-sort]").forEach(th=>th.onclick=()=>{ $("sort").value=th.dataset.sort; sortItems(); });
 function removeItem(f){ if(job&&job.state==="running") return; const k=key(f.path); const it=items.get(k); if(!it) return; it.card.remove(); it.row.remove(); items.delete(k); files=files.filter(x=>key(x.path)!==k); refreshCounts(); updateSelbar(); }
 function refreshCounts(){
   const n=files.length, tot=files.reduce((a,f)=>a+f.bytes,0);
@@ -535,6 +596,7 @@ function setState(it,state){
 }
 $("btnStart").onclick=async()=>{
   const s=readSettings(); if(!(s.max_mb>0)) return toast("Enter a size limit first");
+  askNotify();
   const chosen=selCount()?selected():files;
   const order=chosen.map(f=>f.path), inJob=new Set(order.map(key));
   resetFoot(); $("summary").classList.remove("on");
@@ -646,6 +708,7 @@ async function tick(){
     for(const it of items.values()){ it.card.classList.remove("dim"); it.row.style.opacity=""; }
     updateSelbar(); showSummary(s); if($("sort").value==="status"||$("sort").value==="saved") sortItems();
     if($("autoOpen").checked&&s.state==="finished"&&!job.reattached) openOutput();
+    if(!job.reattached) alertDone(s);
   }
 }
 
@@ -711,7 +774,7 @@ cmp.addEventListener("pointerup",()=>{ dragging=false; });
 (async()=>{
   const d=await api("/api/defaults"); defaults=d.settings; $("cpu").textContent=d.cpu_count;
   setForm({...defaults,...(load("bc.settings",{})||{})});
-  setMode(load("bc.mode","auto")); setView(load("bc.view","grid"));
+  setMode(load("bc.mode","auto")); setView(load("bc.view","grid")); renderPresets();
   const ts=load("bc.thumb","200"); $("thumbSize").value=ts; document.documentElement.style.setProperty("--thumb",ts+"px");
   if(load("bc.rail","1")==="0") toggleRail(false);
   refreshCounts();
