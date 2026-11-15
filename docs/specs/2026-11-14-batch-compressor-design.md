@@ -27,7 +27,14 @@ For each image:
 5. If still too big, save best effort and mark `over_limit`.
 6. Write file atomically (temp then rename).
 
-Returns a result record: source, destination, original bytes, new bytes, quality used, final dimensions, status, error.
+Returns a result record: source, destination, original bytes, new bytes, quality used, final dimensions, status, error, ssim.
+
+### Quality score (`compressor/quality.py`)
+After encoding, the output is decoded and compared with the image it was encoded from (the resized source, if resized) using luma SSIM with a 7×7 box window, on up to 4×4 tiles of 256 px at the output's resolution (~1 MP, ~100 ms per 4K file). Reported as the tile mean, capped at worst tile + 0.01 so local artifacts aren't averaged away. Resolution loss is reported separately via dimensions. Skipped for PNG (lossless) and copied files. `measure_quality` setting (default on). numpy is optional; without it the score is `null`.
+UI bands: ≥ 0.97 excellent, ≥ 0.93 good, below = "Check quality" filter.
+
+### Preview
+`engine.preview(path, settings)` runs the same load/fit pipeline in memory and writes nothing. Exposed as `POST /api/preview` (image bytes, result JSON in `X-Result`). `GET /api/file` serves real image bytes so the before/after slider compares true pixels, not re-encoded thumbnails.
 
 ## Batch runner (`compressor/batch.py`)
 `ProcessPoolExecutor` with N workers. Job state (queue, per-file results, totals, elapsed, cancel flag) held in memory per job id. Cancel stops dispatching new files; in-flight files finish.

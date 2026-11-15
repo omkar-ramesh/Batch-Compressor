@@ -182,6 +182,45 @@ def thumb(path: str, size: int = 320):
     return Response(data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})
 
 
+_BROWSER_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+                  ".webp": "image/webp", ".gif": "image/gif", ".bmp": "image/bmp"}
+
+
+@app.get("/api/file")
+def raw_file(path: str):
+    """The image's real bytes, for pixel-accurate before/after. Images only."""
+    p = Path(path)
+    mt = _BROWSER_TYPES.get(p.suffix.lower())
+    if mt is None:
+        raise HTTPException(415, "not a browser-viewable image")
+    if not p.is_file():
+        raise HTTPException(404, "file not found")
+    return FileResponse(p, media_type=mt, headers={"Cache-Control": "no-cache"})
+
+
+class PreviewBody(BaseModel):
+    path: str
+    settings: dict = {}
+
+
+@app.post("/api/preview")
+def preview(body: PreviewBody):
+    """Compress one photo in memory with these settings and return the result. Writes nothing."""
+    import json
+    from compressor.engine import preview as engine_preview, _format_for
+    p = Path(body.path)
+    if not p.is_file():
+        raise HTTPException(404, "file not found")
+    settings = Settings.from_dict(body.settings)
+    try:
+        data, result = engine_preview(str(p), settings)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(415, f"cannot preview: {e}")
+    _, ext = _format_for(p, settings)
+    return Response(data, media_type=_BROWSER_TYPES.get(ext, "image/jpeg"),
+                    headers={"X-Result": json.dumps(result), "Cache-Control": "no-store"})
+
+
 @app.post("/api/reset")
 def reset():
     """Forget finished jobs and drop the thumbnail cache. Running jobs are left alone."""

@@ -11,6 +11,7 @@ from typing import Optional
 
 from PIL import Image, ImageFile, ImageOps, UnidentifiedImageError
 
+from . import quality
 from .settings import Settings, SUBSAMPLING_CODES
 
 Image.MAX_IMAGE_PIXELS = None  # we trust local files; 4K+ panoramas exceed the default bomb check
@@ -37,6 +38,7 @@ class Result:
     orig_height: int
     status: str
     error: Optional[str] = None
+    ssim: Optional[float] = None       # perceptual similarity to the source, 1.0 = identical
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -168,6 +170,79 @@ def _atomic_write(dest: Path, data: bytes) -> None:
         raise
 
 
+def _load(src: Path, fmt: str, settings: Settings):
+    """Open, bake in orientation, flatten for the output format.
+    Returns (image, exif_bytes, orig_w, orig_h, source_format, needs_orientation)."""
+    with Image.open(src) as im:
+        orig_w, orig_h = im.size
+        src_format = (im.format or "").upper()
+        needs_orientation = im.getexif().get(0x0112, 1) not in (None, 1)
+        im.load()
+        img = ImageOps.exif_transpose(im)  # bake orientation in first (reads the tag)
+        exif_bytes = None
+        if not settings.strip_metadata:
+            exif = im.getexif()
+            exif[0x0112] = 1  # orientation is now baked in, so reset the tag
+            try:
+                exif_bytes = exif.tobytes() if len(exif) else None
+            except Exception:
+                exif_bytes = None
+        img = _prepare(img, fmt)
+    return img, exif_bytes, orig_w, orig_h, src_format, needs_orientation
+
+
+def _fit(img: Image.Image, fmt: str, settings: Settings, exif: bytes | None):
+    """Quality search, then shrink in steps until it fits. Returns (data, quality, encoded_from, status)."""
+    target = settings.target_bytes
+    scale = 1.0
+    step = settings.resize_step_pct / 100.0
+    cur = img
+    status = STATUS_COMPRESSED
+    while True:
+        if fmt == "PNG":
+            data, q = _encode(cur, fmt, 100, settings, exif), None
+            fits = len(data) <= target
+        else:
+            data, q = _search_quality(cur, fmt, settings, exif, target)
+            fits = q is not None
+        if fits:
+            break
+        long_edge = max(img.size)
+        next_scale = scale * (1 - step)
+        if not settings.allow_resize or long_edge * next_scale < settings.min_long_edge:
+            status = STATUS_OVER_LIMIT
+            q = q if q is not None else settings.quality_min
+            break
+        scale = next_scale
+        new_size = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))
+        cur = img.resize(new_size, Image.LANCZOS)
+    return data, q, cur, status
+
+
+def _score(reference: Image.Image, data: bytes, fmt: str, settings: Settings) -> float | None:
+    if not settings.measure_quality or fmt == "PNG":
+        return None  # PNG is lossless; resolution loss is reported via dimensions
+    try:
+        with Image.open(io.BytesIO(data)) as enc:
+            enc.load()
+            return quality.ssim(reference, enc)
+    except Exception:  # noqa: BLE001 - a missing score must never fail a file
+        return None
+
+
+def preview(src_path: str, settings: Settings) -> tuple[bytes, dict]:
+    """Compress one image in memory with the given settings. Nothing is written.
+    Returns (encoded bytes, result dict without destination)."""
+    src = Path(src_path)
+    original_bytes = src.stat().st_size
+    fmt, _ = _format_for(src, settings)
+    img, exif, ow, oh, _, _ = _load(src, fmt, settings)
+    data, q, cur, status = _fit(img, fmt, settings, exif)
+    r = Result(str(src), None, original_bytes, len(data), q, cur.width, cur.height, ow, oh, status,
+               ssim=_score(cur, data, fmt, settings))
+    return data, r.to_dict()
+
+
 # --------------------------------------------------------------------------- main entry
 
 def compress_file(src_path: str, settings: Settings) -> Result:
@@ -178,68 +253,34 @@ def compress_file(src_path: str, settings: Settings) -> Result:
         return Result(str(src), None, 0, 0, None, 0, 0, 0, 0, STATUS_FAILED, f"cannot stat: {e}")
 
     fmt, ext = _format_for(src, settings)
-    target = settings.target_bytes
 
     try:
+        # Cheap peek (header only) to decide on pass-through before decoding pixels.
         with Image.open(src) as im:
             orig_w, orig_h = im.size
             same_format = (im.format or "").upper() == fmt
             needs_orientation = im.getexif().get(0x0112, 1) not in (None, 1)
 
-            # Pass-through: already small and nothing to change.
-            if original_bytes <= settings.limit_bytes and same_format and not (settings.strip_metadata or needs_orientation):
-                dest = _resolve_destination(src, src.suffix, settings)
-                if dest is None:
-                    return Result(str(src), None, original_bytes, 0, None, orig_w, orig_h, orig_w, orig_h, STATUS_SKIPPED)
-                shutil.copy2(src, dest)
-                return Result(str(src), str(dest), original_bytes, original_bytes, None, orig_w, orig_h, orig_w, orig_h, STATUS_COPIED)
+        if original_bytes <= settings.limit_bytes and same_format and not (settings.strip_metadata or needs_orientation):
+            dest = _resolve_destination(src, src.suffix, settings)
+            if dest is None:
+                return Result(str(src), None, original_bytes, 0, None, orig_w, orig_h, orig_w, orig_h, STATUS_SKIPPED)
+            shutil.copy2(src, dest)
+            return Result(str(src), str(dest), original_bytes, original_bytes, None, orig_w, orig_h, orig_w, orig_h, STATUS_COPIED)
 
-            im.load()
-            img = ImageOps.exif_transpose(im)  # bake orientation in first (reads the tag)
-            exif_bytes = None
-            if not settings.strip_metadata:
-                exif = im.getexif()
-                exif[0x0112] = 1  # orientation is now baked in, so reset the tag
-                try:
-                    exif_bytes = exif.tobytes() if len(exif) else None
-                except Exception:
-                    exif_bytes = None
-            img = _prepare(img, fmt)
-
+        img, exif_bytes, orig_w, orig_h, _, _ = _load(src, fmt, settings)
         dest = _resolve_destination(src, ext, settings)
         if dest is None:
             return Result(str(src), None, original_bytes, 0, None, orig_w, orig_h, orig_w, orig_h, STATUS_SKIPPED)
 
-        scale = 1.0
-        step = settings.resize_step_pct / 100.0
-        cur = img
-        status = STATUS_COMPRESSED
-        while True:
-            if fmt == "PNG":
-                data, q = _encode(cur, fmt, 100, settings, exif_bytes), None
-                fits = len(data) <= target
-            else:
-                data, q = _search_quality(cur, fmt, settings, exif_bytes, target)
-                fits = q is not None
-            if fits:
-                break
-            # Try shrinking
-            long_edge = max(img.size)
-            next_scale = scale * (1 - step)
-            if not settings.allow_resize or long_edge * next_scale < settings.min_long_edge:
-                status = STATUS_OVER_LIMIT
-                q = q if q is not None else settings.quality_min
-                break
-            scale = next_scale
-            new_size = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))
-            cur = img.resize(new_size, Image.LANCZOS)
-
+        data, q, cur, status = _fit(img, fmt, settings, exif_bytes)
         _atomic_write(dest, data)
         return Result(
             source=str(src), destination=str(dest),
             original_bytes=original_bytes, new_bytes=len(data),
             quality=q, width=cur.width, height=cur.height,
             orig_width=orig_w, orig_height=orig_h, status=status,
+            ssim=_score(cur, data, fmt, settings),
         )
     except UnidentifiedImageError:
         return Result(str(src), None, original_bytes, 0, None, 0, 0, 0, 0, STATUS_FAILED, "not a readable image")

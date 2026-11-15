@@ -27,6 +27,7 @@ class Settings:
     output_folder: str = "compressed"
     on_conflict: OnConflict = "suffix"
     workers: int = 0                   # 0 = cpu count
+    measure_quality: bool = True       # compute SSIM vs source for each output
 
     @property
     def target_bytes(self) -> int:

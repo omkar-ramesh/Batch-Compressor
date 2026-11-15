@@ -146,6 +146,9 @@
   .tag.over{background:var(--safelight-dim);color:var(--safelight)}
   .tag.copy{background:var(--paper2);color:var(--text2)}
   .tag.q{color:var(--text3);font-weight:500}
+  .match{font-weight:600}.match.excellent{color:var(--fixed)}.match.good{color:var(--text2)}.match.check{color:var(--bad)}
+  .frame.check{border-color:rgba(239,107,107,.55)}
+  .cmp .pv{position:absolute;top:12px;left:12px;display:flex;gap:8px;align-items:center;color:var(--text2);font-size:12.5px}
   .meta .dims{grid-column:1/-1;font-size:11.5px;color:var(--text3)}
   .meta .dims b{font-weight:500;color:var(--text2)}
   @keyframes flip{0%{transform:translateY(0);opacity:1}40%{transform:translateY(-6px);opacity:0}60%{transform:translateY(6px);opacity:0}100%{transform:translateY(0);opacity:1}}
@@ -323,6 +326,7 @@
         <button class="chip on" data-f="all">All<i id="cAll">0</i></button>
         <button class="chip" data-f="done">Compressed<i id="cDone">0</i></button>
         <button class="chip" data-f="over_limit">Over limit<i id="cOver">0</i></button>
+        <button class="chip" data-f="check" title="Compressed, but the quality score is low enough to be worth a look">Check quality<i id="cCheck">0</i></button>
         <button class="chip" data-f="failed">Failed<i id="cFail">0</i></button>
       </div>
       <button class="quiet" id="btnNew" title="Clear these photos and results to start fresh">New batch</button>
@@ -336,7 +340,7 @@
         </div>
         <div class="acts"><button id="smOpen">Open output folder</button><button id="smNew">New batch</button><button id="smOver" class="quiet hidden">Show over limit</button><button id="smFail" class="quiet hidden">Show failed</button><button id="smHide" class="quiet" aria-label="Hide summary">×</button></div>
         <div class="facts" style="grid-column:1/-1">
-          <span>Compressed<b id="smDone">0</b></span><span>Kept as is<b id="smCopied">0</b></span><span>Over limit<b id="smOverN" class="warn">0</b></span><span>Failed<b id="smFailN" class="bad">0</b></span><span>Time<b id="smTime">—</b></span><span>Speed<b id="smRate">—</b></span><span>Quality used<b id="smQ">—</b></span><span>Resized<b id="smResized">0</b></span>
+          <span>Compressed<b id="smDone">0</b></span><span>Kept as is<b id="smCopied">0</b></span><span>Over limit<b id="smOverN" class="warn">0</b></span><span>Failed<b id="smFailN" class="bad">0</b></span><span>Time<b id="smTime">—</b></span><span>Speed<b id="smRate">—</b></span><span>Quality used<b id="smQ">—</b></span><span title="SSIM vs. the original, 1.000 = identical">Lowest match<b id="smMatch">—</b></span><span>Resized<b id="smResized">0</b></span>
         </div>
       </div>
       <div class="empty" id="empty">
@@ -349,7 +353,7 @@
       </div>
       <div class="grid" id="grid"></div>
       <table id="table" class="hidden">
-        <thead><tr><th class="pk"><input type="checkbox" id="selHead" aria-label="Select all"></th><th></th><th>File</th><th class="n">Original</th><th class="n">New</th><th class="n">Saved</th><th class="n">Quality</th><th class="n">Pixels</th><th>Status</th></tr></thead>
+        <thead><tr><th class="pk"><input type="checkbox" id="selHead" aria-label="Select all"></th><th></th><th>File</th><th class="n">Original</th><th class="n">New</th><th class="n">Saved</th><th class="n">Quality</th><th class="n" title="SSIM vs. the original, 1.000 = identical">Match</th><th class="n">Pixels</th><th>Status</th></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>
@@ -382,6 +386,7 @@
     <div class="handle"></div>
     <div class="lab l" id="mLabL"></div><div class="lab r" id="mLabR"></div>
     <div class="zoom"><button id="mFit">Fit</button><button id="m100">100%</button></div>
+    <div class="pv" id="mPv"><button id="mPreview" title="Run the current settings on this photo in memory. Nothing is saved.">Preview with current settings</button><span id="mPvState"></span></div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -399,6 +404,16 @@ const fmtMB=b=>(b/MB).toFixed(b<10*MB?2:1)+" MB";
 const fmtBig=b=>b>=1073741824?(b/1073741824).toFixed(2)+" GB":fmtMB(b);
 const key=p=>p.toLowerCase();
 const thumbUrl=(p,s)=>`/api/thumb?path=${encodeURIComponent(p)}&size=${s}`;
+// Real pixels when the browser can show the format; otherwise a large thumbnail.
+const rawUrl=p=>/\.(jpe?g|png|webp|gif|bmp)$/i.test(p)?`/api/file?path=${encodeURIComponent(p)}`:thumbUrl(p,2400);
+// SSIM bands. Tuned on 4K photos: q90–95 at 4:4:4 lands ~0.98–0.995, visible blocking starts below ~0.93.
+function verdict(ssim){
+  if(ssim==null) return null;
+  if(ssim>=0.97) return "excellent";
+  if(ssim>=0.93) return "good";
+  return "check";
+}
+const fmtMatch=s=>s==null?"—":s.toFixed(3);
 const toast=m=>{const t=$("toast");t.textContent=m;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),3000);};
 const api=async(url,body,method="POST")=>{
   const r=await fetch(url,body!==undefined?{method,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{});
@@ -424,7 +439,7 @@ function setView(v){ view=v; $("viewGrid").classList.toggle("on",v==="grid"); $(
 $("viewGrid").onclick=()=>setView("grid"); $("viewList").onclick=()=>setView("list");
 $("thumbSize").oninput=e=>{document.documentElement.style.setProperty("--thumb",e.target.value+"px");save("bc.thumb",e.target.value);};
 $("chips").onclick=e=>{const b=e.target.closest(".chip"); if(!b) return; filter=b.dataset.f; document.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===b)); applyFilter();};
-function applyFilter(){ for(const it of items.values()){ const show=filter==="all"||it.state===filter; it.card.classList.toggle("hidden",!show); it.row.classList.toggle("hidden",!show);} }
+function applyFilter(){ for(const it of items.values()){ const show=filter==="all"||it.state===filter||(filter==="check"&&it.res&&verdict(it.res.ssim)==="check"); it.card.classList.toggle("hidden",!show); it.row.classList.toggle("hidden",!show);} }
 
 /* ---------------- items ---------------- */
 function makeItem(f){
@@ -437,7 +452,7 @@ function makeItem(f){
   card.onclick=e=>{ if(e.ctrlKey||e.metaKey||e.shiftKey||selCount()) toggleSel(f,e.shiftKey); else openCompare(f); };
   card.onkeydown=e=>{ if(e.key==="Enter")openCompare(f); if(e.key===" "){e.preventDefault();toggleSel(f,e.shiftKey);} };
   const row=document.createElement("tr"); row.className="queued";
-  row.innerHTML=`<td class="pk"><input type="checkbox" aria-label="Select"></td><td class="t"><img loading="lazy" src="${thumbUrl(f.path,96)}" alt="" onerror="this.style.visibility='hidden'"></td><td class="name" title="${f.path}">${f.name}</td><td class="n">${fmtMB(f.bytes)}</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td><span class="st queued">queued</span></td>`;
+  row.innerHTML=`<td class="pk"><input type="checkbox" aria-label="Select"></td><td class="t"><img loading="lazy" src="${thumbUrl(f.path,96)}" alt="" onerror="this.style.visibility='hidden'"></td><td class="name" title="${f.path}">${f.name}</td><td class="n">${fmtMB(f.bytes)}</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td><span class="st queued">queued</span></td>`;
   row.querySelector("input").onclick=e=>{e.stopPropagation();toggleSel(f,e.shiftKey);};
   row.onclick=e=>{ if(e.ctrlKey||e.metaKey||e.shiftKey) toggleSel(f,e.shiftKey); else openCompare(f); };
   return {f,card,row,res:null,state:"queued",sel:false};
@@ -487,8 +502,8 @@ function refreshCounts(){
   const n=files.length, tot=files.reduce((a,f)=>a+f.bytes,0);
   $("topCount").textContent=n?`${n} photos, ${fmtBig(tot)}`:""; $("cAll").textContent=n;
   $("empty").classList.toggle("hidden",!!n); $("btnStart").disabled=!n||(job&&job.state==="running"); setView(view);
-  let d=0,o=0,fl=0; for(const it of items.values()){ if(it.state==="done")d++; else if(it.state==="over_limit")o++; else if(it.state==="failed")fl++; }
-  $("cDone").textContent=d; $("cOver").textContent=o; $("cFail").textContent=fl;
+  let d=0,o=0,fl=0,ck=0; for(const it of items.values()){ if(it.state==="done")d++; else if(it.state==="over_limit")o++; else if(it.state==="failed")fl++; if(it.res&&verdict(it.res.ssim)==="check")ck++; }
+  $("cDone").textContent=d; $("cOver").textContent=o; $("cFail").textContent=fl; $("cCheck").textContent=ck;
 }
 async function addPaths(paths){
   paths=paths.map(s=>s.trim()).filter(Boolean); if(!paths.length) return;
@@ -513,7 +528,7 @@ drop.addEventListener("drop",e=>{ e.preventDefault(); drop.classList.remove("ove
 function resetFoot(){ $("prog").style.width="0"; $("prog").classList.remove("finished"); $("fState").textContent="Ready"; $("fSaved").textContent="—"; $("fSize").textContent="—"; $("fRate").textContent="—"; $("fTime").textContent="—"; $("fCounts").textContent=""; $("btnOpen").disabled=true; }
 function setState(it,state){
   it.state=state;
-  it.card.classList.remove("working","done","copied","over_limit","failed","skipped"); it.card.classList.toggle("locked",state!=="queued");
+  it.card.classList.remove("working","done","copied","over_limit","failed","skipped","check"); it.card.classList.toggle("locked",state!=="queued");
   if(state!=="queued") it.card.classList.add(state);
   it.row.className=state;
   const st=it.row.querySelector(".st"); st.className="st "+state; st.textContent={queued:"queued",working:"compressing",done:"compressed",copied:"already small",over_limit:"over limit",failed:"failed",skipped:"skipped"}[state];
@@ -538,6 +553,8 @@ function showSummary(s){
   $("smDone").textContent=s.counts.compressed; $("smCopied").textContent=s.counts.copied+s.counts.skipped; $("smOverN").textContent=s.counts.over_limit; $("smFailN").textContent=s.counts.failed;
   $("smTime").textContent=s.elapsed.toFixed(1)+" s"; $("smRate").textContent=s.elapsed?(s.done/s.elapsed).toFixed(1)+" photos/s":"—";
   const qs=rs.filter(r=>r.quality).map(r=>r.quality); $("smQ").textContent=qs.length?(Math.min(...qs)===Math.max(...qs)?`${qs[0]}`:`${Math.min(...qs)}–${Math.max(...qs)}`):"—";
+  const ms=rs.filter(r=>r.ssim!=null).map(r=>r.ssim), lo=ms.length?Math.min(...ms):null;
+  $("smMatch").textContent=fmtMatch(lo); $("smMatch").className=lo==null?"":"match "+verdict(lo);
   $("smResized").textContent=rs.filter(r=>r.status!=="failed"&&(r.width!==r.orig_width||r.height!==r.orig_height)).length;
   $("smOver").classList.toggle("hidden",!s.counts.over_limit); $("smFail").classList.toggle("hidden",!s.counts.failed);
   $("summary").classList.add("on"); $("scroll").scrollTop=0;
@@ -593,7 +610,7 @@ function paintResult(it,r){
   setState(it,state);
   const c=it.card, m=c.querySelector(".meta"), size=m.querySelector(".size"), tag=m.querySelector(".tag"), dims=m.querySelector(".dims");
   const td=it.row.children;
-  if(state==="failed"){ tag.textContent=""; dims.textContent=r.error||"Couldn’t read this file"; c.title=r.error||""; td[8].querySelector(".st").title=r.error||""; return; }
+  if(state==="failed"){ tag.textContent=""; dims.textContent=r.error||"Couldn’t read this file"; c.title=r.error||""; td[9].querySelector(".st").title=r.error||""; return; }
   if(state==="skipped"){ dims.textContent="Output already exists"; return; }
   const pct=r.original_bytes?Math.round((1-r.new_bytes/r.original_bytes)*100):0;
   size.innerHTML=`<s>${fmtMB(r.original_bytes)}</s>${fmtMB(r.new_bytes)}`; size.classList.add("flip");
@@ -601,8 +618,12 @@ function paintResult(it,r){
   else if(state==="over_limit"){ tag.className="tag over"; tag.textContent="over limit"; }
   else { tag.className="tag save"; tag.textContent=`−${pct}%`; }
   const resized=r.width!==r.orig_width||r.height!==r.orig_height;
-  dims.innerHTML=(r.quality?`q <b>${r.quality}</b> · `:"")+(resized?`${r.orig_width}×${r.orig_height} → <b>${r.width}×${r.height}</b>`:`<b>${r.width}×${r.height}</b>`);
-  td[4].textContent=fmtMB(r.new_bytes); td[5].textContent=pct>0?`−${pct}%`:`${pct}%`; td[5].style.color=pct>0?"var(--fixed)":""; td[6].textContent=r.quality??"—"; td[7].textContent=resized?`${r.width}×${r.height} ↓`:`${r.width}×${r.height}`;
+  const v=verdict(r.ssim), match=v?`<span class="match ${v}" title="SSIM vs. original: ${v}">${fmtMatch(r.ssim)}</span> · `:"";
+  dims.innerHTML=match+(r.quality?`q <b>${r.quality}</b> · `:"")+(resized?`${r.orig_width}×${r.orig_height} → <b>${r.width}×${r.height}</b>`:`<b>${r.width}×${r.height}</b>`);
+  c.classList.toggle("check",v==="check");
+  td[4].textContent=fmtMB(r.new_bytes); td[5].textContent=pct>0?`−${pct}%`:`${pct}%`; td[5].style.color=pct>0?"var(--fixed)":""; td[6].textContent=r.quality??"—";
+  td[7].innerHTML=v?`<span class="match ${v}">${fmtMatch(r.ssim)}</span>`:"—";
+  td[8].textContent=resized?`${r.width}×${r.height} ↓`:`${r.width}×${r.height}`;
 }
 async function tick(){
   if(!job) return;
@@ -629,30 +650,62 @@ async function tick(){
 }
 
 /* ---------------- compare ---------------- */
-const cmp=$("cmp"); let cut=50, zoom="fit";
+const cmp=$("cmp"); let cut=50, zoom="fit", pvUrl=null, pvToken=0;
+function showAfter(src,r,label){
+  const after=$("mAfter");
+  after.src=src; after.style.display="";
+  cmp.style.setProperty("--cut","50%"); cut=50; cmp.querySelector(".handle").style.display="";
+  const v=verdict(r.ssim);
+  $("mInfo").textContent=` ${fmtMB(r.original_bytes)} → ${fmtMB(r.new_bytes)}`+(r.quality?`, quality ${r.quality}`:"")+`, ${r.width}×${r.height}`+(v?`, match ${fmtMatch(r.ssim)} (${v})`:"")+(r.status==="over_limit"?", still over limit":"");
+  $("mLabL").textContent="Original "+fmtMB(r.original_bytes); $("mLabR").textContent=label+" "+fmtMB(r.new_bytes);
+}
+function clearPreview(){ pvToken++; if(pvUrl){URL.revokeObjectURL(pvUrl);pvUrl=null;} $("mPvState").textContent=""; $("mPreview").disabled=false; }
 function openCompare(f){
+  clearPreview();
   const it=items.get(key(f.path)); const r=it&&it.res;
   $("mName").textContent=f.name; $("mName").dataset.path=f.path;
-  const before=$("mBefore"), after=$("mAfter");
-  before.src=thumbUrl(f.path,1800);
+  $("mBefore").src=rawUrl(f.path);
   if(r&&r.destination&&r.status!=="failed"){
-    after.src=thumbUrl(r.destination,1800); after.style.display="";
-    cmp.style.setProperty("--cut","50%"); cut=50; cmp.querySelector(".handle").style.display="";
-    $("mInfo").textContent=` ${fmtMB(r.original_bytes)} → ${fmtMB(r.new_bytes)}`+(r.quality?`, quality ${r.quality}`:"")+`, ${r.width}×${r.height}`;
-    $("mLabL").textContent="Original "+fmtMB(r.original_bytes); $("mLabR").textContent="Compressed "+fmtMB(r.new_bytes);
+    showAfter(rawUrl(r.destination),r,"Compressed");
   } else {
-    after.removeAttribute("src"); after.style.display="none"; cmp.querySelector(".handle").style.display="none";
+    const after=$("mAfter"); after.removeAttribute("src"); after.style.display="none"; cmp.querySelector(".handle").style.display="none";
     $("mInfo").textContent=` ${fmtMB(f.bytes)}, not compressed yet`; $("mLabL").textContent="Original"; $("mLabR").textContent="";
   }
+  $("mPreview").textContent=r&&r.destination?"Try current settings":"Preview with current settings";
   setZoom("fit"); $("modal").classList.add("open"); $("mClose").focus();
 }
-function setZoom(z){ zoom=z; for(const im of [$("mBefore"),$("mAfter")]){ if(z==="fit"){im.style.maxWidth="100%";im.style.maxHeight="100%";} else {im.style.maxWidth="none";im.style.maxHeight="none";} } $("mFit").classList.toggle("on",z==="fit"); $("m100").classList.toggle("on",z==="100"); }
+$("mPreview").onclick=async()=>{
+  const path=$("mName").dataset.path; if(!path) return;
+  clearPreview(); const tok=pvToken;
+  $("mPreview").disabled=true; $("mPvState").textContent="Compressing in memory…";
+  try{
+    const resp=await fetch("/api/preview",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path,settings:readSettings()})});
+    if(!resp.ok) throw new Error((await resp.json().catch(()=>({detail:resp.statusText}))).detail);
+    const r=JSON.parse(resp.headers.get("X-Result")), blob=await resp.blob();
+    if(tok!==pvToken) return;                     // modal moved on to another photo
+    pvUrl=URL.createObjectURL(blob);
+    showAfter(pvUrl,r,"Preview"); setZoom(zoom);
+    $("mPvState").textContent="Preview only, nothing saved";
+  }catch(e){ if(tok===pvToken) $("mPvState").textContent="Preview failed: "+e.message; }
+  finally{ if(tok===pvToken) $("mPreview").disabled=false; }
+};
+// In 100% mode both layers get the compressed image's pixel width, so a resized output still lines up with the original.
+function setZoom(z){
+  zoom=z; const b=$("mBefore"), a=$("mAfter");
+  for(const im of [b,a]){ im.style.width=""; im.style.maxWidth=z==="fit"?"100%":"none"; im.style.maxHeight=z==="fit"?"100%":"none"; }
+  if(z==="100"){ const w=(a.style.display!=="none"&&a.naturalWidth)||b.naturalWidth; if(w){ b.style.width=a.style.width=w+"px"; } }
+  $("mFit").classList.toggle("on",z==="fit"); $("m100").classList.toggle("on",z==="100");
+}
+$("mAfter").onload=()=>{ if(zoom==="100") setZoom("100"); };
 $("mFit").onclick=()=>setZoom("fit"); $("m100").onclick=()=>setZoom("100");
-$("mClose").onclick=()=>$("modal").classList.remove("open");
-document.addEventListener("keydown",e=>{ if(e.key==="Escape") $("modal").classList.remove("open"); if(e.key==="Enter"&&!$("modal").classList.contains("open")&&document.activeElement.tagName!=="TEXTAREA"&&!$("btnStart").disabled&&document.activeElement.tagName!=="BUTTON") $("btnStart").click(); });
+const closeModal=()=>{ $("modal").classList.remove("open"); clearPreview(); };
+$("mClose").onclick=closeModal;
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&$("modal").classList.contains("open")) closeModal(); if(e.key==="Enter"&&!$("modal").classList.contains("open")&&document.activeElement.tagName!=="TEXTAREA"&&!$("btnStart").disabled&&document.activeElement.tagName!=="BUTTON") $("btnStart").click(); });
 const move=e=>{ const b=cmp.getBoundingClientRect(); cut=Math.max(0,Math.min(100,(e.clientX-b.left)/b.width*100)); cmp.style.setProperty("--cut",cut+"%"); };
-cmp.addEventListener("pointerdown",e=>{cmp.setPointerCapture(e.pointerId);move(e);});
-cmp.addEventListener("pointermove",e=>{if(e.buttons)move(e);});
+let dragging=false;
+cmp.addEventListener("pointerdown",e=>{ if(e.target.closest("button")) return; dragging=true; cmp.setPointerCapture(e.pointerId); move(e); });
+cmp.addEventListener("pointermove",e=>{ if(dragging&&e.buttons) move(e); });
+cmp.addEventListener("pointerup",()=>{ dragging=false; });
 
 /* ---------------- init ---------------- */
 (async()=>{
