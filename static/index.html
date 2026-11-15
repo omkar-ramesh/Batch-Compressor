@@ -505,6 +505,7 @@ document.querySelectorAll("#manualBox input,#manualBox select,#max_mb").forEach(
 // Built-ins only list what differs from Auto; everything else comes from the defaults.
 const BUILTIN_PRESETS=[
   {name:"Email / chat · 8 MB", mode:"auto", s:{max_mb:8}},
+  {name:"Instagram / Reddit · 8 MB", mode:"manual", s:{max_mb:8,output_format:"keep"}},
   {name:"Web gallery · 2 MB WebP", mode:"manual", s:{max_mb:2,output_format:"webp",quality_min:80}},
   {name:"Archive · near-lossless 15 MB", mode:"manual", s:{max_mb:15,quality_min:92,allow_resize:false}},
 ];
